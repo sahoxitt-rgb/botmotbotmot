@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAHO CHEATS | Sistem Paneli</title>
+    <style>
+        :root {
+            --bg-color: #0f0f13;
+            --card-bg: #1a1a24;
+            --border-color: #2b2b36;
+            --text-main: #ffffff;
+            --text-muted: #8892b0;
+            --gold: #F1C40F;
+            --green: #57F287;
+            --red: #ED4245;
+            --blue: #5865F2;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: var(--gold);
+            font-size: 2.5rem;
+            margin: 0;
+            letter-spacing: 2px;
+            text-shadow: 0 0 15px rgba(241, 196, 15, 0.4);
+        }
+
+        .header p {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            margin-top: 10px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            width: 100%;
+            max-width: 1100px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 4px;
+            background: var(--border-color);
+            transition: background 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: var(--gold);
+            box-shadow: 0 12px 20px rgba(241, 196, 15, 0.1);
+        }
+
+        .card:hover::before {
+            background: var(--gold);
+        }
+
+        .card h3 {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            margin: 0 0 15px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin: 0;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        /* Dinamik Renk Sınıfları */
+        .color-green { color: var(--green); }
+        .color-red { color: var(--red); }
+        .color-gold { color: var(--gold); }
+        .color-blue { color: var(--blue); }
+        .color-white { color: var(--text-main); }
+
+        .footer {
+            margin-top: 50px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            text-align: center;
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>🛡️ SAHO CHEATS PANEL</h1>
+        <p>Sistem ve Loader Durumları Anlık Olarak İzlenmektedir</p>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h3>🤖 Bot Durumu</h3>
+            <div class="value" id="status">Bağlanıyor...</div>
+        </div>
+        <div class="card">
+            <h3>🏓 Gecikme (Ping)</h3>
+            <div class="value color-blue" id="ping">0 ms</div>
+        </div>
+        <div class="card">
+            <h3>👥 Seslideki Üyeler</h3>
+            <div class="value color-gold" id="members">0</div>
+        </div>
+        <div class="card">
+            <h3>🛡️ Loader Güvenliği</h3>
+            <div class="value" id="loader">Yükleniyor...</div>
+        </div>
+        <div class="card">
+            <h3>🔒 Bakım Modu</h3>
+            <div class="value" id="maintenance">Kontrol Ediliyor...</div>
+        </div>
+        <div class="card">
+            <h3>⏱️ Bot Çalışma Süresi</h3>
+            <div class="value color-white" id="uptime">0s</div>
+        </div>
+    </div>
+
+    <div class="footer">
+        © 2026 SAHO CHEATS Automation Systems | Canlı Veri Akışı Aktif 🟢
+    </div>
+
+    <script>
+        // Milisaniyeyi Gün/Saat/Dakika formatına çeviren araç
+        function formatUptime(ms) {
+            if (!ms) return "0 dk";
+            let totalSeconds = Math.floor(ms / 1000);
+            let days = Math.floor(totalSeconds / 86400);
+            let hours = Math.floor((totalSeconds % 86400) / 3600);
+            let minutes = Math.floor((totalSeconds % 3600) / 60);
+            
+            let result = "";
+            if (days > 0) result += days + "g ";
+            if (hours > 0) result += hours + "s ";
+            result += minutes + "dk";
+            return result;
+        }
+
+        // Arka plandan (index.js API'sinden) verileri çeken fonksiyon
+        async function fetchStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+
+                // 1. Bot Durumu
+                const statusEl = document.getElementById('status');
+                statusEl.innerText = data.status;
+                statusEl.className = data.status.includes('Online') ? 'value color-green' : 'value color-red pulse';
+
+                // 2. Ping
+                document.getElementById('ping').innerText = data.ping + ' ms';
+
+                // 3. Sesli Üyeler
+                document.getElementById('members').innerText = data.memberCount;
+
+                // 4. Loader Güvenliği (Slash komutla değişen değer)
+                const loaderEl = document.getElementById('loader');
+                loaderEl.innerText = data.loaderStatus;
+                if(data.loaderStatus.includes('UNDETECTED')) loaderEl.className = 'value color-green';
+                else if(data.loaderStatus.includes('DETECTED')) loaderEl.className = 'value color-red pulse';
+                else loaderEl.className = 'value color-gold';
+
+                // 5. Bakım Modu
+                const maintEl = document.getElementById('maintenance');
+                maintEl.innerText = data.maintenance;
+                maintEl.className = data.maintenance.includes('Aktif') ? 'value color-red' : 'value color-green';
+
+                // 6. Çalışma Süresi (Uptime)
+                document.getElementById('uptime').innerText = formatUptime(data.uptime);
+
+            } catch (error) {
+                console.error("API'ye bağlanılamadı:", error);
+                document.getElementById('status').innerText = 'Bağlantı Koptu 🔴';
+                document.getElementById('status').className = 'value color-red pulse';
+            }
+        }
+
+        // Sayfa açılır açılmaz veriyi çek
+        fetchStats();
+
+        // Sonra her 5 saniyede bir (5000 ms) ekranı sessizce güncelle
+        setInterval(fetchStats, 5000);
+    </script>
+</body>
+</html>

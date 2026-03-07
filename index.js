@@ -26,7 +26,9 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 // =============================================================================
 // AYARLAR VE KONFİGÜRASYON
 // =============================================================================
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Eğer API key yoksa botun komple çökmemesi için ufak bir kontrol ekledik
+const apiKey = process.env.GEMINI_API_KEY || "BOS";
+const genAI = new GoogleGenerativeAI(apiKey);
 
 const CONFIG = {
     // ------------------- VERİTABANI BAĞLANTISI -------------------
@@ -634,10 +636,14 @@ client.on('messageCreate', async message => {
         });
     }
 
-    // 3. TROLL AI SOHBET SİSTEMİ (LİMİTLER KALDIRILDI)
+    // 3. TROLL AI SOHBET SİSTEMİ (GÜNCELLENDİ: HATA DEDEKTÖRLÜ)
     try {
         const aiChannelId = await firebaseRequest('get', '_AI_CHANNEL_');
         if (aiChannelId && message.channel.id === aiChannelId) {
+            
+            // Eğer resim falan attıysa text boştur, yoksay
+            if (!message.content || message.content.trim() === "") return;
+
             if (content.includes("ananı skm") || content.includes("ananı sikiyim")) {
                 return message.reply("bende senin ananı skym asdasdasdasd uza lan buradan 🤣");
             }
@@ -647,7 +653,11 @@ client.on('messageCreate', async message => {
 
             await message.channel.sendTyping();
             
-            // Sınırları kaldıran safety ayarları eklendi
+            // Render'da şifre cidden yoksa direkt chatten uyar
+            if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "BOS") {
+                return message.reply("⚠️ Kanka Render'da GEMINI_API_KEY şifresini algılamadı. Ayarları kontrol edip Render'ı 'Clear Cache & Deploy' yapsana.");
+            }
+
             const model = genAI.getGenerativeModel({ 
                 model: "gemini-1.5-flash",
                 systemInstruction: "Sen Discord'da takılan, çok laubali, sarkastik, biraz troll ve kafa dengi bir botsun. İnsanlara 'kanka', 'birader', 'olum' diye hitap et. Çok ciddi cevaplar verme, ironi yap. Arada cümle sonlarına 'asdasd', 'qweqwe' veya random harfler (jsjsjs) ekleyerek gül. Kısa ve net cevaplar ver. Biri sana laf atarsa altta kalma, lafı yapıştır.",
@@ -659,19 +669,18 @@ client.on('messageCreate', async message => {
                 ]
             });
 
-            const result = await model.generateContent(message.content);
+            const result = await model.generateContent(message.content.toString());
             const responseText = result.response.text();
 
-            if (!responseText) throw new Error("Boş cevap");
+            if (!responseText) throw new Error("Google filtrelediği için boş döndü.");
             return message.reply(responseText);
         }
     } catch (error) {
-        console.error("AI Hatası:", error);
-        // Eğer Render'a şifreyi girmezsen bu hatayı atar ki anlayasın
-        if(error.message && error.message.includes("API key not valid")) {
-            return message.reply("Kanka API anahtarımı Render'a girmeyi unutmuşsun aq, beni bi tamir et jsjsjs");
-        }
-        return message.reply("Oğlum o kadar saçmaladın ki beynim yandı aq asdasdasd tekrar düzgün bir şey yaz.");
+        console.error("🔥 AI KESİN HATA LOGU:", error);
+        
+        // Hata mesajını direk chat'e atıyor ki neyin patladığını görelim
+        const errorMsg = error.message ? error.message : "Bilinmeyen hata amk";
+        return message.reply(`⚠️ **Kanka bir boklar oldu aq!** Hata detayı: \`${errorMsg}\``);
     }
 });
 

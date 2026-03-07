@@ -21,6 +21,7 @@ const { joinVoiceChannel, VoiceConnectionStatus, entersState } = require('@disco
 const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const path = require('path'); // DASHBOARD İÇİN EKLENDİ
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // =============================================================================
@@ -40,7 +41,7 @@ const CONFIG = {
     MASTER_VIEW_ID: "1380526273431994449",
     SUPPORT_ROLE_ID: "1380526273431994449",
     // ------------------- KANALLAR VE ROLLER -------------------
-    LOG_CHANNEL_ID: "BURAYA_LOG_KANAL_ID_YAZ",
+    LOG_CHANNEL_ID: "1469080536659001568", // GÜNCELLENDİ
     CUSTOMER_ROLE_ID: "BURAYA_MUSTERI_ROL_ID_YAZ",
     DEPREM_CHANNEL_ID: "BURAYA_DEPREM_KANAL_ID_YAZ",
     WELCOME_CHANNEL_ID: "BURAYA_WELCOME_KANAL_ID_YAZ",
@@ -81,9 +82,11 @@ let loaderStatus = "UNDETECTED 🟢";
 let lastEarthquakeTime = 0; 
 
 // =============================================================================
-// 1. WEB SERVER
+// 1. WEB SERVER & DASHBOARD
 // =============================================================================
 const app = express();
+app.use(express.static(path.join(__dirname, 'public'))); // DASHBOARD İÇİN EKLENDİ
+
 app.get('/', (req, res) => {
     res.send({
         status: 'Online',
@@ -91,6 +94,23 @@ app.get('/', (req, res) => {
         time: new Date().toISOString()
     });
 });
+
+// DASHBOARD VERİ ÇIKIŞI İÇİN EKLENDİ
+app.get('/api/stats', (req, res) => {
+    let memberCount = 0;
+    const guild = client.guilds.cache.get(CONFIG.VOICE_GUILD_ID);
+    if (guild) memberCount = guild.memberCount;
+
+    res.json({
+        status: client.isReady() ? 'Online 🟢' : 'Offline 🔴',
+        ping: client.ws.ping || 0,
+        memberCount: memberCount,
+        loaderStatus: loaderStatus,
+        maintenance: isMaintenanceEnabled ? 'Aktif 🔒' : 'Kapalı 🔓',
+        uptime: client.uptime || 0
+    });
+});
+
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
     console.log(`🌍 [SERVER] Web sunucusu ${port} portunda başlatıldı.`);
@@ -369,10 +389,17 @@ async function getNextTicketNumber() {
     return count;
 }
 
+// LOG GÖNDERME FONKSİYONU GÜNCELLENDİ (Embedleri desteklemesi için)
 async function sendLog(guild, content) {
     if (!guild || !CONFIG.LOG_CHANNEL_ID || CONFIG.LOG_CHANNEL_ID === "BURAYA_LOG_KANAL_ID_YAZ") return;
     const channel = guild.channels.cache.get(CONFIG.LOG_CHANNEL_ID);
-    if (channel) channel.send({ content: content }).catch(() => {});
+    if (channel) {
+        if (typeof content === 'string') {
+            channel.send({ content: content }).catch(() => {});
+        } else {
+            channel.send(content).catch(() => {});
+        }
+    }
 }
 
 function createPanelPayload(key, parts) {
@@ -598,6 +625,51 @@ client.on('guildMemberAdd', async member => {
     channel.send({ content: `${member.user}`, embeds: [embed] });
 });
 
+// ---------------- HAFİYE LOG SİSTEMİ EKLENDİ ----------------
+client.on('messageDelete', async message => {
+    if (message.author?.bot) return; 
+    const embed = new EmbedBuilder()
+        .setTitle('🗑️ Mesaj Silindi')
+        .setColor(CONFIG.ERROR_COLOR)
+        .setDescription(`**Kullanıcı:** ${message.author} (\`${message.author?.tag}\`)\n**Kanal:** ${message.channel}\n\n**Silinen Mesaj:**\n\`\`\`text\n${message.content || 'İçerik yok veya Resim atıldı'}\n\`\`\``)
+        .setTimestamp();
+    sendLog(message.guild, { embeds: [embed] });
+});
+
+client.on('messageUpdate', async (oldMessage, newMessage) => {
+    if (oldMessage.author?.bot) return;
+    if (oldMessage.content === newMessage.content) return; 
+    const embed = new EmbedBuilder()
+        .setTitle('📝 Mesaj Düzenlendi')
+        .setColor(CONFIG.GOLD_COLOR)
+        .setDescription(`**Kullanıcı:** ${oldMessage.author} (\`${oldMessage.author?.tag}\`)\n**Kanal:** ${oldMessage.channel}`)
+        .addFields(
+            { name: 'Eski Mesaj', value: `\`\`\`text\n${oldMessage.content || 'Boş'}\n\`\`\``, inline: false },
+            { name: 'Yeni Mesaj', value: `\`\`\`text\n${newMessage.content || 'Boş'}\n\`\`\``, inline: false }
+        )
+        .setTimestamp();
+    sendLog(oldMessage.guild, { embeds: [embed] });
+});
+
+client.on('voiceStateUpdate', async (oldState, newState) => {
+    const member = newState.member || oldState.member;
+    if (member.user.bot) return; 
+    
+    let embed = new EmbedBuilder().setTimestamp().setAuthor({ name: member.user.tag, iconURL: member.user.displayAvatarURL() });
+
+    if (!oldState.channelId && newState.channelId) {
+        embed.setTitle('🔊 Ses Kanalına Girdi').setColor(CONFIG.SUCCESS_COLOR).setDescription(`**Kullanıcı:** ${member}\n**Girdiği Kanal:** ${newState.channel}`);
+        sendLog(newState.guild, { embeds: [embed] });
+    } else if (oldState.channelId && !newState.channelId) {
+        embed.setTitle('🔇 Ses Kanalından Çıktı').setColor(CONFIG.ERROR_COLOR).setDescription(`**Kullanıcı:** ${member}\n**Çıktığı Kanal:** ${oldState.channel}`);
+        sendLog(oldState.guild, { embeds: [embed] });
+    } else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
+        embed.setTitle('🔄 Ses Kanalı Değiştirdi').setColor(CONFIG.INFO_COLOR).setDescription(`**Kullanıcı:** ${member}\n**Eski Kanal:** ${oldState.channel}\n**Yeni Kanal:** ${newState.channel}`);
+        sendLog(newState.guild, { embeds: [embed] });
+    }
+});
+// ---------------- HAFİYE LOG SİSTEMİ BİTİŞ ----------------
+
 // =============================================================================
 // OTO MODERASYON, OTO CEVAP VE TROLL YAPAY ZEKA (AI)
 // =============================================================================
@@ -794,7 +866,7 @@ async function handleCommand(interaction) {
             const urun = options.getString('urun');
             const ozelliklerStr = options.getString('ozellikler');
             const ozellikler = ozelliklerStr.split(',').slice(0, 60); // Max 60
-           
+            
             const gorsel1 = options.getAttachment('gorsel1');
             const gorsel2 = options.getAttachment('gorsel2');
             const gorsel3 = options.getAttachment('gorsel3');

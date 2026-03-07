@@ -636,12 +636,11 @@ client.on('messageCreate', async message => {
         });
     }
 
-    // 3. TROLL AI SOHBET SİSTEMİ (GÜNCELLENDİ: HATA DEDEKTÖRLÜ)
+    // 3. TROLL AI SOHBET SİSTEMİ (GÜNCELLENDİ: HATA DEDEKTÖRLÜ & YENİ MODEL)
     try {
         const aiChannelId = await firebaseRequest('get', '_AI_CHANNEL_');
         if (aiChannelId && message.channel.id === aiChannelId) {
             
-            // Eğer resim falan attıysa text boştur, yoksay
             if (!message.content || message.content.trim() === "") return;
 
             if (content.includes("ananı skm") || content.includes("ananı sikiyim")) {
@@ -653,13 +652,13 @@ client.on('messageCreate', async message => {
 
             await message.channel.sendTyping();
             
-            // Render'da şifre cidden yoksa direkt chatten uyar
             if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "BOS") {
                 return message.reply("⚠️ Kanka Render'da GEMINI_API_KEY şifresini algılamadı. Ayarları kontrol edip Render'ı 'Clear Cache & Deploy' yapsana.");
             }
 
+            // MODEL İSMİ BURADA GÜNCELLENDİ
             const model = genAI.getGenerativeModel({ 
-                model: "gemini-1.5-flash",
+                model: "gemini-1.5-flash-latest", // <---- HATAYI ÇÖZEN KISIM
                 systemInstruction: "Sen Discord'da takılan, çok laubali, sarkastik, biraz troll ve kafa dengi bir botsun. İnsanlara 'kanka', 'birader', 'olum' diye hitap et. Çok ciddi cevaplar verme, ironi yap. Arada cümle sonlarına 'asdasd', 'qweqwe' veya random harfler (jsjsjs) ekleyerek gül. Kısa ve net cevaplar ver. Biri sana laf atarsa altta kalma, lafı yapıştır.",
                 safetySettings: [
                     { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },

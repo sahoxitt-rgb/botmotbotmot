@@ -15,29 +15,33 @@ const {
     PermissionFlagsBits,
     ChannelType,
     PermissionsBitField,
-    ActivityType,
-    ChannelSelectMenuBuilder
+    ActivityType
 } = require('discord.js');
+const { joinVoiceChannel, VoiceConnectionStatus, entersState } = require('@discordjs/voice'); // Ses için eksik olan modülü ekledim
 const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const { GoogleGenerativeAI } = require("@google/generative-ai"); // YENİ: Yapay Zeka Modülü
+
 // =============================================================================
 // AYARLAR VE KONFİGÜRASYON
 // =============================================================================
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY); // YENİ: Yapay zeka başlatıcısı
+
 const CONFIG = {
     // ------------------- VERİTABANI BAĞLANTISI -------------------
     FIREBASE_URL: process.env.FIREBASE_URL,
     FIREBASE_SECRET: process.env.FIREBASE_SECRET,
  
-    // ------------------- YETKİLENDİRME -------------------
+    // -------  ------------ YETKİLENDİRME -------------------
     OWNER_ID: "1380526273431994449",
     MASTER_VIEW_ID: "1380526273431994449",
     SUPPORT_ROLE_ID: "1380526273431994449",
     // ------------------- KANALLAR VE ROLLER -------------------
     LOG_CHANNEL_ID: "BURAYA_LOG_KANAL_ID_YAZ",
     CUSTOMER_ROLE_ID: "BURAYA_MUSTERI_ROL_ID_YAZ",
-    DEPREM_CHANNEL_ID: "BURAYA_DEPREM_KANAL_ID_YAZ", // YENİ: Deprem bildirim kanalı
-    WELCOME_CHANNEL_ID: "BURAYA_WELCOME_KANAL_ID_YAZ", // YENİ: Hoş geldin kanalı
+    DEPREM_CHANNEL_ID: "BURAYA_DEPREM_KANAL_ID_YAZ",
+    WELCOME_CHANNEL_ID: "BURAYA_WELCOME_KANAL_ID_YAZ",
  
     // ------------------- 7/24 SES AYARLARI -------------------
     VOICE_GUILD_ID: "1446824586808262709",
@@ -54,12 +58,12 @@ const CONFIG = {
     ERROR_COLOR: '#ED4245',
     INFO_COLOR: '#5865F2',
     GOLD_COLOR: '#F1C40F',
-    // ------------------- DEPREM AYARLARI (YENİ) -------------------
-    DEPREM_API_URL: 'https://deprem.afad.gov.tr/last-earthquakes.html', // AFAD sitesi (parse edilecek)
-    DEPREM_CHECK_INTERVAL: 60000, // 1 dakika
-    DEPREM_MIN_MAGNITUDE: 3.0, // Minimum büyüklük
-    // ------------------- WELCOMER AYARLARI (YENİ) -------------------
-    WELCOME_SETTINGS: { // Default ayarlar, Firebase'de saklanacak
+    // ------------------- DEPREM AYARLARI -------------------
+    DEPREM_API_URL: 'https://deprem.afad.gov.tr/last-earthquakes.html', 
+    DEPREM_CHECK_INTERVAL: 60000, 
+    DEPREM_MIN_MAGNITUDE: 3.0, 
+    // ------------------- WELCOMER AYARLARI -------------------
+    WELCOME_SETTINGS: { 
         showUsername: true,
         showAvatar: true,
         showJoinDate: true,
@@ -67,11 +71,12 @@ const CONFIG = {
         showMemberCount: true
     }
 };
+
 // ------------------- GLOBAL DEĞİŞKENLER -------------------
 let isMaintenanceEnabled = false;
 let loaderStatus = "UNDETECTED 🟢";
-// ------------------- DEPREM GLOBAL (YENİ) -------------------
-let lastEarthquakeTime = 0; // Son deprem timestamp'i
+let lastEarthquakeTime = 0; 
+
 // =============================================================================
 // 1. WEB SERVER
 // =============================================================================
@@ -79,7 +84,7 @@ const app = express();
 app.get('/', (req, res) => {
     res.send({
         status: 'Online',
-        system: 'SAHO CHEATS SYSTEM vFinal + Music + Deprem + Welcomer',
+        system: 'SAHO CHEATS SYSTEM vFinal + Music + Deprem + Welcomer + AI',
         time: new Date().toISOString()
     });
 });
@@ -87,6 +92,7 @@ const port = process.env.PORT || 8080;
 app.listen(port, () => {
     console.log(`🌍 [SERVER] Web sunucusu ${port} portunda başlatıldı.`);
 });
+
 // =============================================================================
 // 2. BOT İSTEMCİSİ
 // =============================================================================
@@ -101,8 +107,9 @@ const client = new Client({
     ],
     partials: [Partials.Channel, Partials.Message, Partials.User]
 });
+
 // =============================================================================
-// 3. KOMUT LİSTESİ (YENİ KOMUTLAR EKLENDİ)
+// 3. KOMUT LİSTESİ
 // =============================================================================
 const commands = [
     // ------------------- VİTRİN VE ÜRÜN YÖNETİMİ -------------------
@@ -124,17 +131,22 @@ const commands = [
     new SlashCommandBuilder()
         .setName('sss')
         .setDescription('❓ Sıkça Sorulan Sorular'),
- 
     new SlashCommandBuilder()
         .setName('help')
         .setDescription('📚 Bot kullanım rehberi ve tüm komutlar.'),
-    // ------------------- DEPREM SİSTEMİ (YENİ) -------------------
+    // ------------------- YAPAY ZEKA (YENİ) -------------------
+    new SlashCommandBuilder()
+        .setName('ai-kur')
+        .setDescription('🤖 (Admin) Troll Yapay Zeka sohbet kanalını belirler.')
+        .addChannelOption(o => o.setName('kanal').setDescription('AI Kanalı').setRequired(true))
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    // ------------------- DEPREM SİSTEMİ -------------------
     new SlashCommandBuilder()
         .setName('depremkur')
         .setDescription('🚨 (Admin) Deprem bildirim kanalını kurar.')
         .addChannelOption(o => o.setName('kanal').setDescription('Bildirim Kanalı').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-    // ------------------- WELCOMER SİSTEMİ (YENİ) -------------------
+    // ------------------- WELCOMER SİSTEMİ -------------------
     new SlashCommandBuilder()
         .setName('welcomer-kur')
         .setDescription('👋 (Admin) Hoş geldin sistemini kurar.')
@@ -247,11 +259,9 @@ const commands = [
     new SlashCommandBuilder()
         .setName('cevir')
         .setDescription('🎡 Şans Çarkı! (Ödül kazanma şansı).'),
- 
     new SlashCommandBuilder()
         .setName('cark-oranlar')
         .setDescription('📊 Çarkıfelekteki ödüllerin oranlarını gösterir.'),
- 
     new SlashCommandBuilder()
         .setName('cark-hak-ekle')
         .setDescription('🎡 (Admin) Kullanıcıya çark hakkı verir.')
@@ -302,10 +312,10 @@ const commands = [
         .addIntegerOption(o => o.setName('adet').setDescription('Adet').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ].map(command => command.toJSON());
+
 // =============================================================================
 // 4. YARDIMCI FONKSİYONLAR
 // =============================================================================
-// --- FIREBASE İSTEK YÖNETİCİSİ ---
 async function firebaseRequest(method, path, data = null) {
     const url = `${CONFIG.FIREBASE_URL}${path}.json?auth=${CONFIG.FIREBASE_SECRET}`;
     try {
@@ -322,7 +332,7 @@ async function firebaseRequest(method, path, data = null) {
         return null;
     }
 }
-// --- KULLANICI LİSANS BULUCU ---
+
 async function findUserKey(discordId) {
     const data = await firebaseRequest('get', '');
     if (!data) return null;
@@ -336,13 +346,13 @@ async function findUserKey(discordId) {
     }
     return null;
 }
-// --- YETKİ KONTROLÜ ---
+
 async function checkPermission(userId) {
     if (userId === CONFIG.OWNER_ID) return true;
     const admins = await firebaseRequest('get', '_ADMINS_');
     return admins && admins[userId];
 }
-// --- TICKET SAYACI ---
+
 async function getNextTicketNumber() {
     let count = await firebaseRequest('get', '_TICKET_COUNT');
     if (!count) count = 0;
@@ -350,13 +360,13 @@ async function getNextTicketNumber() {
     await firebaseRequest('put', '_TICKET_COUNT', count);
     return count;
 }
-// --- LOG SİSTEMİ ---
+
 async function sendLog(guild, content) {
     if (!guild || !CONFIG.LOG_CHANNEL_ID || CONFIG.LOG_CHANNEL_ID === "BURAYA_LOG_KANAL_ID_YAZ") return;
     const channel = guild.channels.cache.get(CONFIG.LOG_CHANNEL_ID);
     if (channel) channel.send({ content: content }).catch(() => {});
 }
-// --- LİSANS PANELİ OLUŞTURUCU ---
+
 function createPanelPayload(key, parts) {
     while (parts.length < 8) parts.push("0");
  
@@ -400,9 +410,7 @@ function createPanelPayload(key, parts) {
     );
     return { embeds: [embed], components: [row] };
 }
-// =============================================================================
-// DEPREM SİSTEMİ YARDIMCI FONKSİYONLARI (YENİ)
-// =============================================================================
+
 async function checkEarthquakes() {
     try {
         const response = await axios.get(CONFIG.DEPREM_API_URL);
@@ -410,11 +418,11 @@ async function checkEarthquakes() {
         const $ = cheerio.load(html);
         const earthquakes = [];
         $('table tr').each((i, row) => {
-            if (i === 0) return; // Header satırı atla
+            if (i === 0) return; 
             const cols = $(row).find('td');
             if (cols.length >= 7) {
                 const date_time_tr = $(cols[0]).text().trim();
-                const date_time_utc = new Date(date_time_tr).toISOString(); // UTC çevir (yaklaşık)
+                const date_time_utc = new Date(date_time_tr).toISOString(); 
                 const magnitude = parseFloat($(cols[5]).text().trim());
                 const depth_km = parseFloat($(cols[4]).text().trim());
                 const location = $(cols[6]).text().trim();
@@ -448,9 +456,7 @@ async function checkEarthquakes() {
         console.error('Deprem kontrol hatası:', error);
     }
 }
-// =============================================================================
-// WELCOMER SİSTEMİ YARDIMCI FONKSİYONLARI (YENİ)
-// =============================================================================
+
 async function getWelcomeSettings(guildId) {
     const settings = await firebaseRequest('get', `_WELCOME_SETTINGS_/${guildId}`);
     return settings || CONFIG.WELCOME_SETTINGS;
@@ -458,6 +464,7 @@ async function getWelcomeSettings(guildId) {
 async function setWelcomeSettings(guildId, newSettings) {
     await firebaseRequest('put', `_WELCOME_SETTINGS_/${guildId}`, newSettings);
 }
+
 // =============================================================================
 // 5. BOT EVENTS
 // =============================================================================
@@ -467,11 +474,11 @@ client.once('ready', async () => {
     console.log(`🆔 BOT ID: ${client.user.id}`);
     console.log(`🚨 DEPREM SİSTEMİ AKTİF`);
     console.log(`👋 WELCOMER SİSTEMİ AKTİF`);
+    console.log(`🤖 YAPAY ZEKA (AI) AKTİF`);
     console.log(`=============================================\n`);
  
-    // 7/24 ses bağlantısı
     connectToVoice();
-    // Dinamik durum döngüsü
+
     let index = 0;
     setInterval(() => {
         let totalVoice = 0;
@@ -481,12 +488,13 @@ client.once('ready', async () => {
             `🔊 ${totalVoice} Kişi Seste`,
             `🛡️ Loader: ${loaderStatus}`,
             `7/24 Destek Hattı`,
-            `🚨 Deprem İzliyor`
+            `🚨 Deprem İzliyor`,
+            `🤖 Sizinle Sohbet Ediyor`
         ];
         client.user.setActivity({ name: activities[index], type: ActivityType.Playing });
         index = (index + 1) % activities.length;
     }, 5000);
-    // Lisans süre kontrolü
+
     setInterval(async () => {
         const data = await firebaseRequest('get', '');
         if (!data) return;
@@ -509,10 +517,10 @@ client.once('ready', async () => {
             }
         }
     }, 3600000);
-    // Deprem kontrol interval (YENİ)
+
     setInterval(checkEarthquakes, CONFIG.DEPREM_CHECK_INTERVAL);
-    checkEarthquakes(); // İlk kontrol
-    // Komut yükleme
+    checkEarthquakes(); 
+
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     try {
         console.log('🔄 Komutlar API\'ye yükleniyor...');
@@ -520,7 +528,7 @@ client.once('ready', async () => {
         console.log('✨ Komutlar başarıyla yüklendi!');
     } catch (e) { console.error('Komut hatası:', e); }
 });
-// 7/24 ses bağlantısı
+
 async function connectToVoice() {
     const guild = client.guilds.cache.get(CONFIG.VOICE_GUILD_ID);
     if (!guild) return console.log("❌ [SES] Hedef sunucu bulunamadı!");
@@ -552,7 +560,7 @@ async function connectToVoice() {
         setTimeout(connectToVoice, 5000);
     }
 }
-// Hoş geldin mesajı (YENİLENMİŞ)
+
 client.on('guildMemberAdd', async member => {
     const channelId = CONFIG.WELCOME_CHANNEL_ID;
     if (!channelId || channelId === "BURAYA_WELCOME_KANAL_ID_YAZ") return;
@@ -574,23 +582,86 @@ client.on('guildMemberAdd', async member => {
      
     channel.send({ content: `${member.user}`, embeds: [embed] });
 });
-// Oto cevap
+
+// =============================================================================
+// GELİŞMİŞ OTO MODERASYON VE TROLL YAPAY ZEKA SOHBETİ (YENİ EKLENDİ)
+// =============================================================================
+const KUFURLER = ["amk", "aq", "sik", "oç", "piç", "yavşak", "sürtük", "göt"];
+const REKLAM_REGEX = /(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,}|discord\.gg\/[a-zA-Z0-9]+)/gi;
+
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
+
+    const isAdmin = message.member?.permissions.has(PermissionsBitField.Flags.Administrator);
     const content = message.content.toLowerCase();
+
+    // --- 1. ERENSİ TARZI OTO-MODERASYON ---
+    if (!isAdmin) {
+        if (REKLAM_REGEX.test(content)) {
+            await message.delete().catch(() => {});
+            return message.channel.send(`⛔ **${message.author}**, bu sunucuda link veya reklam paylaşmak yasak koçum! Akıllı ol.`);
+        }
+
+        const kufurVarMi = KUFURLER.some(kufur => {
+            const regex = new RegExp(`\\b${kufur}\\b`, 'i');
+            return regex.test(content);
+        });
+
+        if (kufurVarMi) {
+            await message.delete().catch(() => {});
+            return message.channel.send(`🤬 **${message.author}**, ağzını topla kankam! Burada küfür yasak.`);
+        }
+    }
+
+    // --- 2. OTO CEVAPLAR ---
     if (content.includes('fiyat') || content.includes('kaç tl') || content.includes('ne kadar')) {
-        message.reply({
+        return message.reply({
             content: `👋 Merhaba **${message.author.username}**! \n💰 Güncel fiyat listesi için <#${CONFIG.LOG_CHANNEL_ID}> kanalına bakabilir veya \`/ticket-kur\` komutuyla ticket açarak öğrenebilirsin.`,
             allowedMentions: { repliedUser: true }
         });
     }
     if (content.includes('nasıl alırım') || content.includes('satın al') || content.includes('ödeme')) {
-        message.reply({
+        return message.reply({
             content: `🛒 Satın almak için lütfen **Ticket** açınız. Yetkililerimiz size yardımcı olacaktır.`,
             allowedMentions: { repliedUser: true }
         });
     }
+
+    // --- 3. TROLL AI SOHBET SİSTEMİ ---
+    const aiChannelId = await firebaseRequest('get', '_AI_CHANNEL_');
+    if (aiChannelId && message.channel.id === aiChannelId) {
+        
+        // Ozel hardcoded (sabit) cevaplar - Yapay zekaya takılmadan racon kestiğimiz yer
+        if (content.includes("ananı skm") || content.includes("ananı sikiyim") || content.includes("ananı sikeyim")) {
+            return message.reply("bende senin ananı skym asdasdasdasd uza lan buradan 🤣");
+        }
+        if (content.includes("oç") || content.includes("orospu")) {
+            return message.reply("sensin oç aynaya bak da konuş qweqweqwe 😂");
+        }
+
+        // Yapay zeka'ya istek atıldığı için yazıyor... işareti gönderelim
+        await message.channel.sendTyping();
+
+        try {
+            const model = genAI.getGenerativeModel({ 
+                model: "gemini-1.5-flash",
+                systemInstruction: "Sen Discord'da takılan, çok laubali, sarkastik, biraz troll ve kafa dengi bir botsun. İnsanlara 'kanka', 'birader', 'olum' diye hitap et. Çok ciddi cevaplar verme, ironi yap. Arada cümle sonlarına 'asdasd', 'qweqwe' veya random harfler (jsjsjs) eklearak gül. Kısa ve net cevaplar ver. Biri sana laf atarsa altta kalma, lafı yapıştır."
+            });
+
+            const result = await model.generateContent(message.content);
+            const responseText = result.response.text();
+
+            if (!responseText) throw new Error("Boş cevap");
+
+            return message.reply(responseText);
+
+        } catch (error) {
+            console.error("AI Hatası:", error);
+            return message.reply("Oğlum o kadar saçmaladın ki beynim yandı aq asdasdasd tekrar düzgün bir şey yaz.");
+        }
+    }
 });
+
 // =============================================================================
 // 6. ETKİLEŞİM YÖNETİCİSİ
 // =============================================================================
@@ -606,18 +677,25 @@ client.on('interactionCreate', async interaction => {
         if (interaction.isChatInputCommand()) return handleCommand(interaction);
     } catch (e) { console.error('Etkileşim Hatası:', e); }
 });
+
 // =============================================================================
 // 7. SLASH KOMUT HANDLER
 // =============================================================================
 async function handleCommand(interaction) {
     const { commandName, options, user, guild } = interaction;
-    // ==================== DEPREM KOMUTLARI (YENİ) ====================
+    
+    // --- YAPAY ZEKA KOMUTU (YENİ) ---
+    if (commandName === 'ai-kur') {
+        const kanal = options.getChannel('kanal');
+        await firebaseRequest('put', '_AI_CHANNEL_', kanal.id);
+        interaction.reply({ content: `✅ AI Sohbet kanalı ${kanal} olarak ayarlandı. Artık botla oradan makara yapabilirsiniz!`, ephemeral: true });
+    }
+
     if (commandName === 'depremkur') {
         const kanal = options.getChannel('kanal');
         CONFIG.DEPREM_CHANNEL_ID = kanal.id;
         interaction.reply({ content: `✅ Deprem bildirimleri ${kanal} kanalına ayarlandı!`, ephemeral: true });
     }
-    // ==================== WELCOMER KOMUTLARI (YENİ) ====================
     if (commandName === 'welcomer-kur') {
         const kanal = options.getChannel('kanal');
         CONFIG.WELCOME_CHANNEL_ID = kanal.id;
@@ -641,9 +719,7 @@ async function handleCommand(interaction) {
             );
         interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
     }
-    // ==================== DİĞER KOMUTLAR ====================
  
-    // --- NUKE ---
     if (commandName === 'nuke') {
         const channel = interaction.channel;
         const position = channel.position;
@@ -665,7 +741,6 @@ async function handleCommand(interaction) {
          
         await newChannel.send({ embeds: [nukeEmbed] });
     }
-    // --- LOCK / UNLOCK ---
     if (commandName === 'lock') {
         await interaction.channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false });
         interaction.reply({ embeds: [new EmbedBuilder().setDescription('🔒 **Kanal kilitlendi.**').setColor(CONFIG.ERROR_COLOR)] });
@@ -674,12 +749,11 @@ async function handleCommand(interaction) {
         await interaction.channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: true });
         interaction.reply({ embeds: [new EmbedBuilder().setDescription('🔓 **Kanal kilidi açıldı.**').setColor(CONFIG.SUCCESS_COLOR)] });
     }
-    // --- FORMAT (YENİLENMİŞ) ---
     if (commandName === 'format') {
         const urun = options.getString('urun');
         const ozelliklerStr = options.getString('ozellikler');
-        const ozellikler = ozelliklerStr.split(',').slice(0, 60); // Max 60
-      
+        const ozellikler = ozelliklerStr.split(',').slice(0, 60); 
+       
         const gorsel1 = options.getAttachment('gorsel1');
         const gorsel2 = options.getAttachment('gorsel2');
         const gorsel3 = options.getAttachment('gorsel3');
@@ -701,7 +775,6 @@ async function handleCommand(interaction) {
         await interaction.channel.send({ embeds: embeds });
         await interaction.reply({ content: '✅ Vitrin güncellendi!', ephemeral: true });
     }
-    // --- TICKET KUR (YENİLENMİŞ PROFESYONEL GÖRÜNÜM) ---
     if (commandName === 'ticket-kur') {
         const embed = new EmbedBuilder()
             .setTitle('🔥 SAHO CHEATS | PROFESYONEL DESTEK MERKEZİ')
@@ -713,7 +786,7 @@ async function handleCommand(interaction) {
             `)
             .setColor(CONFIG.GOLD_COLOR)
             .setThumbnail('https://cdn-icons-png.flaticon.com/512/4712/4712109.png')
-            .setImage('https://example.com/profesyonel-banner.gif') // Banner resim ekle (sen değiştir)
+            .setImage('https://example.com/profesyonel-banner.gif') 
             .setFooter({ text: 'SAHO CHEATS | Hızlı & Güvenilir Destek', iconURL: client.user.avatarURL() });
         const menu = new StringSelectMenuBuilder()
             .setCustomId('ticket_create_menu')
@@ -727,7 +800,6 @@ async function handleCommand(interaction) {
         await interaction.channel.send({ embeds: [embed], components: [row] });
         await interaction.reply({ content: '✅ Profesyonel ticket paneli kuruldu!', ephemeral: true });
     }
-    // --- SSS ---
     if (commandName === 'sss') {
         const embed = new EmbedBuilder()
             .setTitle('❓ SIKÇA SORULAN SORULAR')
@@ -748,7 +820,6 @@ async function handleCommand(interaction) {
          
         await interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
     }
-    // --- HELP ---
     if (commandName === 'help') {
         const embed = new EmbedBuilder()
             .setTitle('📚 SAHO CHEATS | BOT YARDIM MENÜSÜ')
@@ -756,12 +827,11 @@ async function handleCommand(interaction) {
             .setDescription('Botun tüm komutları aşağıda listelenmiştir.')
             .addFields(
                 { name: '👤 **Kullanıcı Komutları**', value: '> `/lisansim`, `/cevir`, `/sss`, `/referans`' },
-                { name: '🛡️ **Yetkili Komutları**', value: '> `/format`, `/ticket-kur`, `/durum-guncelle`, `/loader-durum`\n> `/dm`, `/nuke`, `/lock`, `/unlock`, `/kick`, `/ban`\n> `/vip-ekle`, `/tum-lisanslar`, `/depremkur`, `/welcomer-kur`, `/welcomer-dashboard`' }
+                { name: '🛡️ **Yetkili Komutları**', value: '> `/format`, `/ticket-kur`, `/durum-guncelle`, `/loader-durum`\n> `/dm`, `/nuke`, `/lock`, `/unlock`, `/kick`, `/ban`\n> `/vip-ekle`, `/tum-lisanslar`, `/depremkur`, `/welcomer-kur`, `/welcomer-dashboard`, `/ai-kur`' }
             )
             .setFooter({ text: 'SAHO CHEATS Automation' });
         await interaction.reply({ embeds: [embed], ephemeral: true });
     }
-    // --- TUM LISANSLAR ---
     if (commandName === 'tum-lisanslar') {
         await interaction.deferReply({ ephemeral: true });
         const data = await firebaseRequest('get', '');
@@ -780,19 +850,16 @@ async function handleCommand(interaction) {
         const embed = new EmbedBuilder().setDescription(text.substring(0, 4000)).setColor(CONFIG.EMBED_COLOR).setFooter({ text: `Toplam ${count} aktif lisans` });
         interaction.editReply({ embeds: [embed] });
     }
-    // --- LOADER DURUM ---
     if (commandName === 'loader-durum') {
         loaderStatus = options.getString('durum');
         interaction.reply({ content: `🛡️ Loader durumu güncellendi: **${loaderStatus}**`, ephemeral: true });
     }
-    // --- LİSANSIM ---
     if (commandName === 'lisansim') {
         await interaction.deferReply({ ephemeral: true });
         const result = await findUserKey(user.id);
         if (!result) return interaction.editReply('❌ **Sisteme kayıtlı bir lisansınız bulunmamaktadır.**');
         interaction.editReply(createPanelPayload(result.key, result.parts));
     }
-    // --- DM ---
     if (commandName === 'dm') {
         const targetUser = options.getUser('kullanici');
         const msg = options.getString('mesaj');
@@ -808,7 +875,6 @@ async function handleCommand(interaction) {
             interaction.reply({content:'❌ Kullanıcının DM kutusu kapalı.', ephemeral:true});
         }
     }
-    // --- KICK ---
     if (commandName === 'kick') {
         const targetUser = options.getUser('kullanici');
         const reason = options.getString('sebep') || 'Sebep belirtilmedi';
@@ -822,7 +888,6 @@ async function handleCommand(interaction) {
             .setColor(CONFIG.ERROR_COLOR);
         interaction.reply({embeds: [embed]});
     }
-    // --- BAN ---
     if (commandName === 'ban') {
         const targetUser = options.getUser('kullanici');
         const reason = options.getString('sebep') || 'Sebep yok';
@@ -832,7 +897,6 @@ async function handleCommand(interaction) {
         await member.ban({ reason: reason });
         interaction.reply({ embeds: [new EmbedBuilder().setTitle('🔨 YASAKLAMA').setDescription(`**Yasaklanan:** ${targetUser.tag}\n**Sebep:** ${reason}`).setColor(CONFIG.ERROR_COLOR)] });
     }
-    // --- UNBAN ---
     if (commandName === 'unban') {
         const targetId = options.getString('id');
         try {
@@ -842,18 +906,15 @@ async function handleCommand(interaction) {
             interaction.reply({ content: '❌ Hata.', ephemeral: true });
         }
     }
-    // --- BAKIM MODU ---
     if (commandName === 'bakim-modu') {
         isMaintenanceEnabled = options.getBoolean('durum');
         interaction.reply({content: `🔒 Bakım: ${isMaintenanceEnabled}`, ephemeral:true});
     }
-    // --- TEMİZLE ---
     if (commandName === 'temizle') {
         const amount = options.getInteger('sayi');
         await interaction.channel.bulkDelete(amount, true).catch(() => {});
         interaction.reply({ content: `🧹 **${amount}** mesaj silindi.`, ephemeral: true });
     }
-    // --- DUYURU ---
     if (commandName === 'duyuru') {
         const mesaj = options.getString('mesaj');
         const targetChannel = options.getChannel('kanal') || interaction.channel;
@@ -866,7 +927,6 @@ async function handleCommand(interaction) {
         await targetChannel.send({ content: '@everyone', embeds: [embed] });
         interaction.reply({ content: '✅', ephemeral: true });
     }
-    // --- SUNUCU BİLGİ ---
     if (commandName === 'sunucu-bilgi') {
         const embed = new EmbedBuilder()
             .setTitle(`📊 ${guild.name}`)
@@ -876,7 +936,6 @@ async function handleCommand(interaction) {
             .setColor(CONFIG.EMBED_COLOR);
         interaction.reply({ embeds: [embed] });
     }
-    // --- KARA LİSTE ---
     if (commandName === 'karaliste-ekle') {
         const target = options.getUser('kullanici');
         await firebaseRequest('patch', '_BLACKLIST_', { [target.id]: "BAN" });
@@ -888,7 +947,6 @@ async function handleCommand(interaction) {
         await axios.delete(url);
         interaction.reply({ content: `✅ **${target.tag}** engeli kalktı.`, ephemeral: true });
     }
-    // --- DURUM GÜNCELLE ---
     if (commandName === 'durum-guncelle') {
         const urun = options.getString('urun');
         const durum = options.getString('durum');
@@ -907,7 +965,6 @@ async function handleCommand(interaction) {
         await interaction.channel.send({ embeds: [embed] });
         await interaction.reply({ content: '✅', ephemeral: true });
     }
-    // --- ÇARK ---
     if (commandName === 'cark-hak-ekle') {
         const target = options.getUser('kullanici');
         const adet = options.getInteger('adet');
@@ -916,7 +973,6 @@ async function handleCommand(interaction) {
         await firebaseRequest('put', `_SPIN_RIGHTS_/${target.id}`, currentRight + adet);
         interaction.reply({ content: `✅ **${target.tag}** kullanıcısına **+${adet}** hak eklendi.`, ephemeral: true });
     }
- 
     if (commandName === 'cark-oranlar') {
         const embed = new EmbedBuilder()
             .setTitle('🎡 SAHO CHEATS | ORANLAR')
@@ -924,7 +980,6 @@ async function handleCommand(interaction) {
             .setColor('Gold');
         interaction.reply({ embeds: [embed] });
     }
- 
     if (commandName === 'referans') {
         const puan = options.getInteger('puan');
         const yorum = options.getString('yorum');
@@ -939,7 +994,6 @@ async function handleCommand(interaction) {
             interaction.reply({ content: '❤️', ephemeral: true });
         } else interaction.reply({ content: 'Kanal bulunamadı.', ephemeral: true });
     }
- 
     if (commandName === 'cevir') {
         await interaction.deferReply();
         let extraRights = await firebaseRequest('get', `_SPIN_RIGHTS_/${user.id}`);
@@ -999,7 +1053,6 @@ async function handleCommand(interaction) {
          
         await interaction.editReply({ embeds: [embed] });
     }
-    // --- LİSANS İŞLEMLERİ ---
     if (['vip-ekle', 'kullanici-ekle', 'olustur', 'sil', 'hwid-hak-ekle', 'durdurma-hak-ekle'].includes(commandName)) {
         if (commandName === 'hwid-hak-ekle' || commandName === 'durdurma-hak-ekle') {
             await interaction.deferReply({ ephemeral: true });
@@ -1051,12 +1104,12 @@ async function handleCommand(interaction) {
         }
     }
 }
+
 // =============================================================================
 // 8. BUTON HANDLER
 // =============================================================================
 async function handleButton(interaction) {
     const { customId, user, guild, channel } = interaction;
-    // --- TICKET KAPATMA ---
     if (customId === 'close_ticket') {
         const modal = new EmbedBuilder()
             .setDescription('🔒 **Ticket 5 saniye içinde kapatılıyor...**')
@@ -1072,7 +1125,6 @@ async function handleButton(interaction) {
             .setDescription(`✅ Bu talep **${user}** tarafından devralındı.`)
             .setColor(CONFIG.SUCCESS_COLOR)] });
     }
-    // --- LİSANS İŞLEMLERİ ---
     if (['toggle', 'reset'].includes(customId)) {
         await interaction.deferReply({ ephemeral: true });
         const result = await findUserKey(user.id);
@@ -1103,12 +1155,12 @@ async function handleButton(interaction) {
         await interaction.editReply(createPanelPayload(key, parts));
     }
 }
+
 // =============================================================================
 // 9. SELECT MENU HANDLER
 // =============================================================================
 async function handleSelectMenu(interaction) {
     const { customId, values, user, guild } = interaction;
-    // --- WELCOMER TOGGLE (YENİ) ---
     if (customId === 'welcomer_toggle') {
         const settingKey = values[0];
         const settings = await getWelcomeSettings(guild.id);
@@ -1117,7 +1169,6 @@ async function handleSelectMenu(interaction) {
         interaction.reply({ content: `✅ **${settingKey}** ayarı ${settings[settingKey] ? 'açıldı' : 'kapatıldı'}!`, ephemeral: true });
         return;
     }
-    // --- TICKET OLUŞTURMA MENÜSÜ ---
     if (customId === 'ticket_create_menu') {
         const category = values[0];
         if (isMaintenanceEnabled && !await checkPermission(user.id))
@@ -1172,7 +1223,6 @@ async function handleSelectMenu(interaction) {
         }
         await interaction.editReply(`✅ Ticket açıldı: ${ticketChannel}`);
     }
-    // --- SSS CEVAPLARI ---
     if (interaction.customId === 'faq_select') {
         const val = interaction.values[0];
         let title, desc;
@@ -1191,7 +1241,6 @@ async function handleSelectMenu(interaction) {
             ephemeral: true
         });
     }
-    // --- MARKET FİYAT GÖSTERİMİ ---
     if (interaction.customId === 'select_product') {
         await interaction.deferReply({ ephemeral: true });
         const val = interaction.values[0];
@@ -1211,7 +1260,6 @@ async function handleSelectMenu(interaction) {
         await interaction.editReply({ embeds: [embed] });
         return;
     }
-    // --- LİSANS MENÜLERİ ---
     if (interaction.customId === 'delete_key' || interaction.customId.startsWith('add_right_')) {
         if (!await checkPermission(interaction.user.id))
             return interaction.reply({ content: '⛔ Yetkisiz.', ephemeral: true });
@@ -1238,10 +1286,12 @@ async function handleSelectMenu(interaction) {
         }
     }
 }
+
 // =============================================================================
 // 10. CRASH ENGELLEYİCİ
 // =============================================================================
 process.on('unhandledRejection', error => {
     console.error('Beklenmeyen Hata:', error);
 });
+
 client.login(process.env.TOKEN);

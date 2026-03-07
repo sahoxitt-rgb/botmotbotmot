@@ -17,16 +17,16 @@ const {
     PermissionsBitField,
     ActivityType
 } = require('discord.js');
-const { joinVoiceChannel, VoiceConnectionStatus, entersState } = require('@discordjs/voice'); // Ses için eksik olan modülü ekledim
+const { joinVoiceChannel, VoiceConnectionStatus, entersState } = require('@discordjs/voice');
 const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
-const { GoogleGenerativeAI } = require("@google/generative-ai"); // YENİ: Yapay Zeka Modülü
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // =============================================================================
 // AYARLAR VE KONFİGÜRASYON
 // =============================================================================
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY); // YENİ: Yapay zeka başlatıcısı
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const CONFIG = {
     // ------------------- VERİTABANI BAĞLANTISI -------------------
@@ -42,6 +42,7 @@ const CONFIG = {
     CUSTOMER_ROLE_ID: "BURAYA_MUSTERI_ROL_ID_YAZ",
     DEPREM_CHANNEL_ID: "BURAYA_DEPREM_KANAL_ID_YAZ",
     WELCOME_CHANNEL_ID: "BURAYA_WELCOME_KANAL_ID_YAZ",
+    ARCHIVE_CHANNEL_ID: "1469080536659001568", // YENİ: Ticket Arşiv Kanalı
  
     // ------------------- 7/24 SES AYARLARI -------------------
     VOICE_GUILD_ID: "1446824586808262709",
@@ -84,7 +85,7 @@ const app = express();
 app.get('/', (req, res) => {
     res.send({
         status: 'Online',
-        system: 'SAHO CHEATS SYSTEM vFinal + Music + Deprem + Welcomer + AI',
+        system: 'SAHO CHEATS SYSTEM vFinal + Music + Deprem + Welcomer + AI + Archive',
         time: new Date().toISOString()
     });
 });
@@ -134,10 +135,10 @@ const commands = [
     new SlashCommandBuilder()
         .setName('help')
         .setDescription('📚 Bot kullanım rehberi ve tüm komutlar.'),
-    // ------------------- YAPAY ZEKA (YENİ) -------------------
+    // ------------------- YAPAY ZEKA -------------------
     new SlashCommandBuilder()
         .setName('ai-kur')
-        .setDescription('🤖 (Admin) Troll Yapay Zeka sohbet kanalını belirler.')
+        .setDescription('🤖 (Admin) Troll Yapay Zeka kanalını belirler.')
         .addChannelOption(o => o.setName('kanal').setDescription('AI Kanalı').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     // ------------------- DEPREM SİSTEMİ -------------------
@@ -474,11 +475,13 @@ client.once('ready', async () => {
     console.log(`🆔 BOT ID: ${client.user.id}`);
     console.log(`🚨 DEPREM SİSTEMİ AKTİF`);
     console.log(`👋 WELCOMER SİSTEMİ AKTİF`);
-    console.log(`🤖 YAPAY ZEKA (AI) AKTİF`);
+    console.log(`🤖 YAPAY ZEKA SİSTEMİ AKTİF`);
     console.log(`=============================================\n`);
  
+    // 7/24 ses bağlantısı
     connectToVoice();
 
+    // Dinamik durum döngüsü
     let index = 0;
     setInterval(() => {
         let totalVoice = 0;
@@ -489,12 +492,13 @@ client.once('ready', async () => {
             `🛡️ Loader: ${loaderStatus}`,
             `7/24 Destek Hattı`,
             `🚨 Deprem İzliyor`,
-            `🤖 Sizinle Sohbet Ediyor`
+            `🤖 Troll AI Aktif`
         ];
         client.user.setActivity({ name: activities[index], type: ActivityType.Playing });
         index = (index + 1) % activities.length;
     }, 5000);
 
+    // Lisans süre kontrolü
     setInterval(async () => {
         const data = await firebaseRequest('get', '');
         if (!data) return;
@@ -518,9 +522,11 @@ client.once('ready', async () => {
         }
     }, 3600000);
 
+    // Deprem kontrol interval
     setInterval(checkEarthquakes, CONFIG.DEPREM_CHECK_INTERVAL);
     checkEarthquakes(); 
 
+    // Komut yükleme
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     try {
         console.log('🔄 Komutlar API\'ye yükleniyor...');
@@ -529,6 +535,7 @@ client.once('ready', async () => {
     } catch (e) { console.error('Komut hatası:', e); }
 });
 
+// 7/24 ses bağlantısı
 async function connectToVoice() {
     const guild = client.guilds.cache.get(CONFIG.VOICE_GUILD_ID);
     if (!guild) return console.log("❌ [SES] Hedef sunucu bulunamadı!");
@@ -561,6 +568,7 @@ async function connectToVoice() {
     }
 }
 
+// Hoş geldin mesajı
 client.on('guildMemberAdd', async member => {
     const channelId = CONFIG.WELCOME_CHANNEL_ID;
     if (!channelId || channelId === "BURAYA_WELCOME_KANAL_ID_YAZ") return;
@@ -584,36 +592,30 @@ client.on('guildMemberAdd', async member => {
 });
 
 // =============================================================================
-// GELİŞMİŞ OTO MODERASYON VE TROLL YAPAY ZEKA SOHBETİ (YENİ EKLENDİ)
+// OTO MODERASYON, OTO CEVAP VE TROLL YAPAY ZEKA (AI)
 // =============================================================================
 const KUFURLER = ["amk", "aq", "sik", "oç", "piç", "yavşak", "sürtük", "göt"];
 const REKLAM_REGEX = /(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,}|discord\.gg\/[a-zA-Z0-9]+)/gi;
 
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
-
     const isAdmin = message.member?.permissions.has(PermissionsBitField.Flags.Administrator);
     const content = message.content.toLowerCase();
 
-    // --- 1. ERENSİ TARZI OTO-MODERASYON ---
+    // 1. ERENSİ TARZI OTO-MODERASYON
     if (!isAdmin) {
         if (REKLAM_REGEX.test(content)) {
             await message.delete().catch(() => {});
             return message.channel.send(`⛔ **${message.author}**, bu sunucuda link veya reklam paylaşmak yasak koçum! Akıllı ol.`);
         }
-
-        const kufurVarMi = KUFURLER.some(kufur => {
-            const regex = new RegExp(`\\b${kufur}\\b`, 'i');
-            return regex.test(content);
-        });
-
+        const kufurVarMi = KUFURLER.some(kufur => new RegExp(`\\b${kufur}\\b`, 'i').test(content));
         if (kufurVarMi) {
             await message.delete().catch(() => {});
             return message.channel.send(`🤬 **${message.author}**, ağzını topla kankam! Burada küfür yasak.`);
         }
     }
 
-    // --- 2. OTO CEVAPLAR ---
+    // 2. OTO CEVAPLAR
     if (content.includes('fiyat') || content.includes('kaç tl') || content.includes('ne kadar')) {
         return message.reply({
             content: `👋 Merhaba **${message.author.username}**! \n💰 Güncel fiyat listesi için <#${CONFIG.LOG_CHANNEL_ID}> kanalına bakabilir veya \`/ticket-kur\` komutuyla ticket açarak öğrenebilirsin.`,
@@ -627,43 +629,38 @@ client.on('messageCreate', async message => {
         });
     }
 
-    // --- 3. TROLL AI SOHBET SİSTEMİ ---
-    const aiChannelId = await firebaseRequest('get', '_AI_CHANNEL_');
-    if (aiChannelId && message.channel.id === aiChannelId) {
-        
-        // Ozel hardcoded (sabit) cevaplar - Yapay zekaya takılmadan racon kestiğimiz yer
-        if (content.includes("ananı skm") || content.includes("ananı sikiyim") || content.includes("ananı sikeyim")) {
-            return message.reply("bende senin ananı skym asdasdasdasd uza lan buradan 🤣");
-        }
-        if (content.includes("oç") || content.includes("orospu")) {
-            return message.reply("sensin oç aynaya bak da konuş qweqweqwe 😂");
-        }
+    // 3. TROLL AI SOHBET SİSTEMİ
+    try {
+        const aiChannelId = await firebaseRequest('get', '_AI_CHANNEL_');
+        if (aiChannelId && message.channel.id === aiChannelId) {
+            if (content.includes("ananı skm") || content.includes("ananı sikiyim")) {
+                return message.reply("bende senin ananı skym asdasdasdasd uza lan buradan 🤣");
+            }
+            if (content.includes("oç") || content.includes("orospu")) {
+                return message.reply("sensin oç aynaya bak da konuş qweqweqwe 😂");
+            }
 
-        // Yapay zeka'ya istek atıldığı için yazıyor... işareti gönderelim
-        await message.channel.sendTyping();
-
-        try {
+            await message.channel.sendTyping();
+            
             const model = genAI.getGenerativeModel({ 
                 model: "gemini-1.5-flash",
-                systemInstruction: "Sen Discord'da takılan, çok laubali, sarkastik, biraz troll ve kafa dengi bir botsun. İnsanlara 'kanka', 'birader', 'olum' diye hitap et. Çok ciddi cevaplar verme, ironi yap. Arada cümle sonlarına 'asdasd', 'qweqwe' veya random harfler (jsjsjs) eklearak gül. Kısa ve net cevaplar ver. Biri sana laf atarsa altta kalma, lafı yapıştır."
+                systemInstruction: "Sen Discord'da takılan, çok laubali, sarkastik, biraz troll ve kafa dengi bir botsun. İnsanlara 'kanka', 'birader', 'olum' diye hitap et. Çok ciddi cevaplar verme, ironi yap. Arada cümle sonlarına 'asdasd', 'qweqwe' veya random harfler (jsjsjs) ekleyerek gül. Kısa ve net cevaplar ver. Biri sana laf atarsa altta kalma, lafı yapıştır."
             });
 
             const result = await model.generateContent(message.content);
             const responseText = result.response.text();
 
             if (!responseText) throw new Error("Boş cevap");
-
             return message.reply(responseText);
-
-        } catch (error) {
-            console.error("AI Hatası:", error);
-            return message.reply("Oğlum o kadar saçmaladın ki beynim yandı aq asdasdasd tekrar düzgün bir şey yaz.");
         }
+    } catch (error) {
+        console.error("AI Hatası:", error);
+        return message.reply("Oğlum o kadar saçmaladın ki beynim yandı aq asdasdasd tekrar düzgün bir şey yaz.");
     }
 });
 
 // =============================================================================
-// 6. ETKİLEŞİM YÖNETİCİSİ
+// 6. ETKİLEŞİM YÖNETİCİSİ (ZIRHLI TRY-CATCH)
 // =============================================================================
 client.on('interactionCreate', async interaction => {
     try {
@@ -672,10 +669,10 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ content: '⛔ **SİSTEM TARAFINDAN ENGELLENDİNİZ.**', ephemeral: true });
         }
      
-        if (interaction.isStringSelectMenu()) return handleSelectMenu(interaction);
-        if (interaction.isButton()) return handleButton(interaction);
-        if (interaction.isChatInputCommand()) return handleCommand(interaction);
-    } catch (e) { console.error('Etkileşim Hatası:', e); }
+        if (interaction.isStringSelectMenu()) return await handleSelectMenu(interaction);
+        if (interaction.isButton()) return await handleButton(interaction);
+        if (interaction.isChatInputCommand()) return await handleCommand(interaction);
+    } catch (e) { console.error('Etkileşim Hatası (Gözardı Edildi):', e.message); }
 });
 
 // =============================================================================
@@ -683,615 +680,650 @@ client.on('interactionCreate', async interaction => {
 // =============================================================================
 async function handleCommand(interaction) {
     const { commandName, options, user, guild } = interaction;
-    
-    // --- YAPAY ZEKA KOMUTU (YENİ) ---
-    if (commandName === 'ai-kur') {
-        const kanal = options.getChannel('kanal');
-        await firebaseRequest('put', '_AI_CHANNEL_', kanal.id);
-        interaction.reply({ content: `✅ AI Sohbet kanalı ${kanal} olarak ayarlandı. Artık botla oradan makara yapabilirsiniz!`, ephemeral: true });
-    }
-
-    if (commandName === 'depremkur') {
-        const kanal = options.getChannel('kanal');
-        CONFIG.DEPREM_CHANNEL_ID = kanal.id;
-        interaction.reply({ content: `✅ Deprem bildirimleri ${kanal} kanalına ayarlandı!`, ephemeral: true });
-    }
-    if (commandName === 'welcomer-kur') {
-        const kanal = options.getChannel('kanal');
-        CONFIG.WELCOME_CHANNEL_ID = kanal.id;
-        interaction.reply({ content: `✅ Hoş geldin sistemi ${kanal} kanalına kuruldu!`, ephemeral: true });
-    }
-    if (commandName === 'welcomer-dashboard') {
-        const settings = await getWelcomeSettings(guild.id);
-        const embed = new EmbedBuilder()
-            .setTitle('⚙️ Welcomer Ayarları')
-            .setDescription('Ayarları yönetmek için menüyü kullanın.')
-            .setColor(CONFIG.INFO_COLOR);
-        const menu = new StringSelectMenuBuilder()
-            .setCustomId('welcomer_toggle')
-            .setPlaceholder('Ayar Seç...')
-            .addOptions(
-                { label: 'Kullanıcı Adı Göster', value: 'showUsername', description: settings.showUsername ? 'Açık' : 'Kapalı' },
-                { label: 'Avatar Göster', value: 'showAvatar', description: settings.showAvatar ? 'Açık' : 'Kapalı' },
-                { label: 'Katılım Tarihi Göster', value: 'showJoinDate', description: settings.showJoinDate ? 'Açık' : 'Kapalı' },
-                { label: 'Hesap Oluşturma Göster', value: 'showAccountCreate', description: settings.showAccountCreate ? 'Açık' : 'Kapalı' },
-                { label: 'Üye Sırası Göster', value: 'showMemberCount', description: settings.showMemberCount ? 'Açık' : 'Kapalı' }
-            );
-        interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
-    }
- 
-    if (commandName === 'nuke') {
-        const channel = interaction.channel;
-        const position = channel.position;
-        const topic = channel.topic;
-     
-        await interaction.reply('☢️ **Kanal patlatılıyor...**');
-     
-        const newChannel = await channel.clone();
-        await newChannel.setPosition(position);
-        if (topic) await newChannel.setTopic(topic);
-     
-        await channel.delete();
-     
-        const nukeEmbed = new EmbedBuilder()
-            .setTitle('☢️ KANAL TEMİZLENDİ')
-            .setDescription('Bu kanal **SAHO CHEATS** yönetim tarafından sıfırlandı.')
-            .setImage('https://media1.tenor.com/m/X9kZ5h7qK64AAAAC/nuclear-bomb-explosion.gif')
-            .setColor(CONFIG.ERROR_COLOR);
-         
-        await newChannel.send({ embeds: [nukeEmbed] });
-    }
-    if (commandName === 'lock') {
-        await interaction.channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false });
-        interaction.reply({ embeds: [new EmbedBuilder().setDescription('🔒 **Kanal kilitlendi.**').setColor(CONFIG.ERROR_COLOR)] });
-    }
-    if (commandName === 'unlock') {
-        await interaction.channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: true });
-        interaction.reply({ embeds: [new EmbedBuilder().setDescription('🔓 **Kanal kilidi açıldı.**').setColor(CONFIG.SUCCESS_COLOR)] });
-    }
-    if (commandName === 'format') {
-        const urun = options.getString('urun');
-        const ozelliklerStr = options.getString('ozellikler');
-        const ozellikler = ozelliklerStr.split(',').slice(0, 60); 
-       
-        const gorsel1 = options.getAttachment('gorsel1');
-        const gorsel2 = options.getAttachment('gorsel2');
-        const gorsel3 = options.getAttachment('gorsel3');
-        const gorsel4 = options.getAttachment('gorsel4');
-        const embeds = [];
-        const mainEmbed = new EmbedBuilder()
-            .setTitle(`💎 ${urun}`)
-            .setDescription(`> **${urun}** en güncel sürümüyle stoklarda!\n> Satın almak için: Ticket açın.`)
-            .setColor(CONFIG.GOLD_COLOR)
-            .setImage(gorsel1.url)
-            .setFooter({ text: 'SAHO CHEATS Marketplace', iconURL: guild.iconURL() });
-        let ozellikFields = '';
-        ozellikler.forEach((oz, i) => ozellikFields += `${i+1}. ${oz.trim()}\n`);
-        mainEmbed.addFields({ name: '✨ Özellikler', value: ozellikFields || 'Özellik yok.' });
-        embeds.push(mainEmbed);
-        if (gorsel2) embeds.push(new EmbedBuilder().setURL('https://discord.gg/sahocheats').setImage(gorsel2.url).setColor(CONFIG.GOLD_COLOR));
-        if (gorsel3) embeds.push(new EmbedBuilder().setURL('https://discord.gg/sahocheats').setImage(gorsel3.url).setColor(CONFIG.GOLD_COLOR));
-        if (gorsel4) embeds.push(new EmbedBuilder().setURL('https://discord.gg/sahocheats').setImage(gorsel4.url).setColor(CONFIG.GOLD_COLOR));
-        await interaction.channel.send({ embeds: embeds });
-        await interaction.reply({ content: '✅ Vitrin güncellendi!', ephemeral: true });
-    }
-    if (commandName === 'ticket-kur') {
-        const embed = new EmbedBuilder()
-            .setTitle('🔥 SAHO CHEATS | PROFESYONEL DESTEK MERKEZİ')
-            .setDescription(`
-            **Hoş Geldiniz, Değerli Müşterimiz!**
-         
-            SAHO CHEATS olarak premium hizmet sunuyoruz.
-            Aşağıdaki menüden kategorinizi seçin ve anında destek alın.
-            `)
-            .setColor(CONFIG.GOLD_COLOR)
-            .setThumbnail('https://cdn-icons-png.flaticon.com/512/4712/4712109.png')
-            .setImage('https://example.com/profesyonel-banner.gif') 
-            .setFooter({ text: 'SAHO CHEATS | Hızlı & Güvenilir Destek', iconURL: client.user.avatarURL() });
-        const menu = new StringSelectMenuBuilder()
-            .setCustomId('ticket_create_menu')
-            .setPlaceholder('📩 Destek Kategorisi Seçin...')
-            .addOptions(
-                { label: 'Satın Alım & Fiyat Bilgisi', description: 'Ürün satın alma ve fiyatlar hakkında.', value: 'cat_buy', emoji: '💳' },
-                { label: 'Teknik Destek & Kurulum', description: 'Yazılım kurulum ve sorun giderme.', value: 'cat_tech', emoji: '🛠️' },
-                { label: 'Genel Sorular & Ortaklık', description: 'Diğer konular ve işbirliği.', value: 'cat_other', emoji: '🤝' }
-            );
-        const row = new ActionRowBuilder().addComponents(menu);
-        await interaction.channel.send({ embeds: [embed], components: [row] });
-        await interaction.reply({ content: '✅ Profesyonel ticket paneli kuruldu!', ephemeral: true });
-    }
-    if (commandName === 'sss') {
-        const embed = new EmbedBuilder()
-            .setTitle('❓ SIKÇA SORULAN SORULAR')
-            .setDescription('Aşağıdaki menüden merak ettiğiniz konuyu seçin.')
-            .setColor(CONFIG.INFO_COLOR)
-            .setFooter({ text: 'SAHO CHEATS Knowledge Base' });
-         
-        const menu = new StringSelectMenuBuilder()
-            .setCustomId('faq_select')
-            .setPlaceholder('Bir konu seçin...')
-            .addOptions(
-                { label: 'Ban Riski Var Mı?', description: 'Güvenlik durumu hakkında bilgi.', value: 'faq_ban', emoji: '🛡️' },
-                { label: 'Nasıl Satın Alırım?', description: 'Ödeme yöntemleri ve teslimat.', value: 'faq_buy', emoji: '💳' },
-                { label: 'İade Var Mı?', description: 'İade politikamız.', value: 'faq_refund', emoji: '🔄' },
-                { label: 'Destek Saatleri', description: 'Ne zaman cevap alabilirim?', value: 'faq_support', emoji: '⏰' },
-                { label: 'Kurulum Zor Mu?', description: 'Teknik bilgi gerekir mi?', value: 'faq_install', emoji: '🛠️' }
-            );
-         
-        await interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
-    }
-    if (commandName === 'help') {
-        const embed = new EmbedBuilder()
-            .setTitle('📚 SAHO CHEATS | BOT YARDIM MENÜSÜ')
-            .setColor(CONFIG.EMBED_COLOR)
-            .setDescription('Botun tüm komutları aşağıda listelenmiştir.')
-            .addFields(
-                { name: '👤 **Kullanıcı Komutları**', value: '> `/lisansim`, `/cevir`, `/sss`, `/referans`' },
-                { name: '🛡️ **Yetkili Komutları**', value: '> `/format`, `/ticket-kur`, `/durum-guncelle`, `/loader-durum`\n> `/dm`, `/nuke`, `/lock`, `/unlock`, `/kick`, `/ban`\n> `/vip-ekle`, `/tum-lisanslar`, `/depremkur`, `/welcomer-kur`, `/welcomer-dashboard`, `/ai-kur`' }
-            )
-            .setFooter({ text: 'SAHO CHEATS Automation' });
-        await interaction.reply({ embeds: [embed], ephemeral: true });
-    }
-    if (commandName === 'tum-lisanslar') {
-        await interaction.deferReply({ ephemeral: true });
-        const data = await firebaseRequest('get', '');
-        if (!data) return interaction.editReply('Veri bulunamadı.');
-        let text = "**📜 AKTİF LİSANSLAR LİSTESİ**\n\n";
-        let count = 0;
-        for (const [key, value] of Object.entries(data)) {
-            if (key.startsWith("_") || typeof value !== 'string') continue;
-            let parts = value.split(',');
-            if (parts[4] !== "0") {
-                text += `🔑 \`${key}\` - <@${parts[4]}> (${parts[7] || 'NORMAL'})\n`;
-                count++;
-            }
+    try {
+        // ==================== YENİ EKLENEN SİSTEM KOMUTLARI ====================
+        if (commandName === 'ai-kur') {
+            const kanal = options.getChannel('kanal');
+            await firebaseRequest('put', '_AI_CHANNEL_', kanal.id);
+            return interaction.reply({ content: `✅ AI Sohbet kanalı ${kanal} olarak ayarlandı. Artık botla oradan makara yapabilirsiniz!`, ephemeral: true });
         }
-        if (count === 0) text += "🚫 Hiçbir kullanıcıya lisans tanımlanmamış.";
-        const embed = new EmbedBuilder().setDescription(text.substring(0, 4000)).setColor(CONFIG.EMBED_COLOR).setFooter({ text: `Toplam ${count} aktif lisans` });
-        interaction.editReply({ embeds: [embed] });
-    }
-    if (commandName === 'loader-durum') {
-        loaderStatus = options.getString('durum');
-        interaction.reply({ content: `🛡️ Loader durumu güncellendi: **${loaderStatus}**`, ephemeral: true });
-    }
-    if (commandName === 'lisansim') {
-        await interaction.deferReply({ ephemeral: true });
-        const result = await findUserKey(user.id);
-        if (!result) return interaction.editReply('❌ **Sisteme kayıtlı bir lisansınız bulunmamaktadır.**');
-        interaction.editReply(createPanelPayload(result.key, result.parts));
-    }
-    if (commandName === 'dm') {
-        const targetUser = options.getUser('kullanici');
-        const msg = options.getString('mesaj');
-        try {
+        if (commandName === 'depremkur') {
+            const kanal = options.getChannel('kanal');
+            CONFIG.DEPREM_CHANNEL_ID = kanal.id;
+            return interaction.reply({ content: `✅ Deprem bildirimleri ${kanal} kanalına ayarlandı!`, ephemeral: true });
+        }
+        if (commandName === 'welcomer-kur') {
+            const kanal = options.getChannel('kanal');
+            CONFIG.WELCOME_CHANNEL_ID = kanal.id;
+            return interaction.reply({ content: `✅ Hoş geldin sistemi ${kanal} kanalına kuruldu!`, ephemeral: true });
+        }
+        if (commandName === 'welcomer-dashboard') {
+            const settings = await getWelcomeSettings(guild.id);
             const embed = new EmbedBuilder()
-                .setTitle('📨 SAHO CHEATS MESAJ')
-                .setDescription(msg)
-                .setColor(CONFIG.EMBED_COLOR)
-                .setFooter({text:'Bu mesaj yetkililer tarafından gönderildi.'});
-            await targetUser.send({embeds: [embed]});
-            interaction.reply({content:`✅ Mesaj **${targetUser.tag}** kullanıcısına gönderildi.`, ephemeral:true});
-        } catch (e) {
-            interaction.reply({content:'❌ Kullanıcının DM kutusu kapalı.', ephemeral:true});
+                .setTitle('⚙️ Welcomer Ayarları')
+                .setDescription('Ayarları yönetmek için menüyü kullanın.')
+                .setColor(CONFIG.INFO_COLOR);
+            const menu = new StringSelectMenuBuilder()
+                .setCustomId('welcomer_toggle')
+                .setPlaceholder('Ayar Seç...')
+                .addOptions(
+                    { label: 'Kullanıcı Adı Göster', value: 'showUsername', description: settings.showUsername ? 'Açık' : 'Kapalı' },
+                    { label: 'Avatar Göster', value: 'showAvatar', description: settings.showAvatar ? 'Açık' : 'Kapalı' },
+                    { label: 'Katılım Tarihi Göster', value: 'showJoinDate', description: settings.showJoinDate ? 'Açık' : 'Kapalı' },
+                    { label: 'Hesap Oluşturma Göster', value: 'showAccountCreate', description: settings.showAccountCreate ? 'Açık' : 'Kapalı' },
+                    { label: 'Üye Sırası Göster', value: 'showMemberCount', description: settings.showMemberCount ? 'Açık' : 'Kapalı' }
+                );
+            return interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
         }
-    }
-    if (commandName === 'kick') {
-        const targetUser = options.getUser('kullanici');
-        const reason = options.getString('sebep') || 'Sebep belirtilmedi';
-        const member = guild.members.cache.get(targetUser.id);
-        if (!member) return interaction.reply({content:'Kullanıcı sunucuda bulunamadı.', ephemeral:true});
-        if (!member.kickable) return interaction.reply({content:'Bu kullanıcıyı atamam (Yetkim yetersiz).', ephemeral:true});
-        await member.kick(reason);
-        const embed = new EmbedBuilder()
-            .setTitle('👢 KICK İŞLEMİ')
-            .setDescription(`**Atılan:** ${targetUser.tag}\n**Sebep:** ${reason}\n**Yetkili:** ${user.tag}`)
-            .setColor(CONFIG.ERROR_COLOR);
-        interaction.reply({embeds: [embed]});
-    }
-    if (commandName === 'ban') {
-        const targetUser = options.getUser('kullanici');
-        const reason = options.getString('sebep') || 'Sebep yok';
-        const member = guild.members.cache.get(targetUser.id);
-        if (!member) return interaction.reply({ content: '❌ Kullanıcı yok.', ephemeral: true });
-        if (!member.bannable) return interaction.reply({ content: '❌ Yasaklayamıyorum.', ephemeral: true });
-        await member.ban({ reason: reason });
-        interaction.reply({ embeds: [new EmbedBuilder().setTitle('🔨 YASAKLAMA').setDescription(`**Yasaklanan:** ${targetUser.tag}\n**Sebep:** ${reason}`).setColor(CONFIG.ERROR_COLOR)] });
-    }
-    if (commandName === 'unban') {
-        const targetId = options.getString('id');
-        try {
-            await guild.members.unban(targetId);
-            interaction.reply({ content: `✅ **${targetId}** yasağı kaldırıldı.`, ephemeral: true });
-        } catch (error) {
-            interaction.reply({ content: '❌ Hata.', ephemeral: true });
-        }
-    }
-    if (commandName === 'bakim-modu') {
-        isMaintenanceEnabled = options.getBoolean('durum');
-        interaction.reply({content: `🔒 Bakım: ${isMaintenanceEnabled}`, ephemeral:true});
-    }
-    if (commandName === 'temizle') {
-        const amount = options.getInteger('sayi');
-        await interaction.channel.bulkDelete(amount, true).catch(() => {});
-        interaction.reply({ content: `🧹 **${amount}** mesaj silindi.`, ephemeral: true });
-    }
-    if (commandName === 'duyuru') {
-        const mesaj = options.getString('mesaj');
-        const targetChannel = options.getChannel('kanal') || interaction.channel;
-        const embed = new EmbedBuilder()
-            .setTitle('📢 SAHO CHEATS DUYURU')
-            .setDescription(mesaj)
-            .setColor(CONFIG.EMBED_COLOR)
-            .setFooter({ text: guild.name })
-            .setTimestamp();
-        await targetChannel.send({ content: '@everyone', embeds: [embed] });
-        interaction.reply({ content: '✅', ephemeral: true });
-    }
-    if (commandName === 'sunucu-bilgi') {
-        const embed = new EmbedBuilder()
-            .setTitle(`📊 ${guild.name}`)
-            .addFields(
-                { name: '👥 Üye', value: `${guild.memberCount}`, inline: true }
-            )
-            .setColor(CONFIG.EMBED_COLOR);
-        interaction.reply({ embeds: [embed] });
-    }
-    if (commandName === 'karaliste-ekle') {
-        const target = options.getUser('kullanici');
-        await firebaseRequest('patch', '_BLACKLIST_', { [target.id]: "BAN" });
-        interaction.reply({ content: `⛔ **${target.tag}** engellendi.`, ephemeral: true });
-    }
-    if (commandName === 'karaliste-cikar') {
-        const target = options.getUser('kullanici');
-        const url = `${CONFIG.FIREBASE_URL}_BLACKLIST_/${target.id}.json?auth=${CONFIG.FIREBASE_SECRET}`;
-        await axios.delete(url);
-        interaction.reply({ content: `✅ **${target.tag}** engeli kalktı.`, ephemeral: true });
-    }
-    if (commandName === 'durum-guncelle') {
-        const urun = options.getString('urun');
-        const durum = options.getString('durum');
-        let color, statusText, emoji;
-        if (durum === 'safe') { color = 'Green'; statusText = 'SAFE / GÜVENLİ'; emoji = '🟢'; }
-        else if (durum === 'detected') { color = 'Red'; statusText = 'DETECTED / RİSKLİ'; emoji = '🔴'; }
-        else { color = 'Yellow'; statusText = 'UPDATING / BAKIMDA'; emoji = '🟡'; }
-        const embed = new EmbedBuilder()
-            .setTitle(`${emoji} DURUM BİLGİSİ`)
-            .addFields(
-                { name: '📂 Yazılım', value: `**${urun}**`, inline: true },
-                { name: '📡 Durum', value: `\`${statusText}\``, inline: true }
-            )
-            .setColor(color)
-            .setFooter({ text: 'SAHO CHEATS Status' });
-        await interaction.channel.send({ embeds: [embed] });
-        await interaction.reply({ content: '✅', ephemeral: true });
-    }
-    if (commandName === 'cark-hak-ekle') {
-        const target = options.getUser('kullanici');
-        const adet = options.getInteger('adet');
-        let currentRight = await firebaseRequest('get', `_SPIN_RIGHTS_/${target.id}`);
-        if (!currentRight) currentRight = 0; else currentRight = parseInt(currentRight);
-        await firebaseRequest('put', `_SPIN_RIGHTS_/${target.id}`, currentRight + adet);
-        interaction.reply({ content: `✅ **${target.tag}** kullanıcısına **+${adet}** hak eklendi.`, ephemeral: true });
-    }
-    if (commandName === 'cark-oranlar') {
-        const embed = new EmbedBuilder()
-            .setTitle('🎡 SAHO CHEATS | ORANLAR')
-            .setDescription('💎 %0.5 External\n🔥 %1.5 Bypass\n👑 %3.0 Mod Menü\n🎫 %10 İndirim\n❌ %85 PAS')
-            .setColor('Gold');
-        interaction.reply({ embeds: [embed] });
-    }
-    if (commandName === 'referans') {
-        const puan = options.getInteger('puan');
-        const yorum = options.getString('yorum');
-        const stars = '⭐'.repeat(puan);
-        const embed = new EmbedBuilder()
-            .setAuthor({ name: `${user.username} referans bıraktı!`, iconURL: user.displayAvatarURL() })
-            .setDescription(`**Puan:** ${stars}\n**Yorum:** ${yorum}`)
-            .setColor('Gold');
-        const vouchChannel = guild.channels.cache.find(c => c.name.includes('referans') || c.name.includes('vouch'));
-        if (vouchChannel) {
-            await vouchChannel.send({ embeds: [embed] });
-            interaction.reply({ content: '❤️', ephemeral: true });
-        } else interaction.reply({ content: 'Kanal bulunamadı.', ephemeral: true });
-    }
-    if (commandName === 'cevir') {
-        await interaction.deferReply();
-        let extraRights = await firebaseRequest('get', `_SPIN_RIGHTS_/${user.id}`);
-        if (!extraRights) extraRights = 0; else extraRights = parseInt(extraRights);
-     
-        let usedExtra = false;
-        if (extraRights > 0) {
-            extraRights--;
-            await firebaseRequest('put', `_SPIN_RIGHTS_/${user.id}`, extraRights);
-            usedExtra = true;
-        } else {
-            const spinData = await firebaseRequest('get', `_SPIN_TIMES_/${user.id}`);
-            const now = Date.now();
-            const cooldown = 24 * 60 * 60 * 1000;
-            if (spinData) {
-                const lastSpin = parseInt(spinData);
-                if (now - lastSpin < cooldown) return interaction.editReply(`⏳ **Günlük hakkın doldu!**\nTekrar denemek için: <t:${Math.floor((lastSpin + cooldown) / 1000)}:R>`);
-            }
-            await firebaseRequest('patch', '_SPIN_TIMES_', { [user.id]: now });
-        }
-        const items = [
-            { name: "1 AYLIK EXTERNAL 💎", chance: 5, type: 'legendary' },
-            { name: "1 HAFTALIK BYPASS 🔥", chance: 15, type: 'epic' },
-            { name: "1 GÜNLÜK MOD MENU 👑", chance: 30, type: 'rare' },
-            { name: "%10 İndirim Kuponu 🎫", chance: 100, type: 'common' },
-            { name: "PAS (Tekrar Dene) ❌", chance: 850, type: 'lose' }
-        ];
-        const totalWeight = items.reduce((sum, item) => sum + item.chance, 0);
-        let random = Math.floor(Math.random() * totalWeight);
-        let selectedItem = items[0];
-        for (const item of items) {
-            if (random < item.chance) {
-                selectedItem = item;
-                break;
-            }
-            random -= item.chance;
-        }
-        let color = CONFIG.EMBED_COLOR;
-        let description = "";
-        let footerText = usedExtra ? `Ekstra hak kullanıldı. Kalan: ${extraRights}` : `${user.username} günlük hakkını kullandı`;
-        if (selectedItem.type === 'legendary' || selectedItem.type === 'epic' || selectedItem.type === 'rare') {
-            color = 'Gold';
-            description = `🎉 **TEBRİKLER! ÖDÜL KAZANDIN!**\n\nKazandığın: **${selectedItem.name}**\n\n*Hemen ticket aç ve bu ekranın görüntüsünü at!*`;
-        } else if (selectedItem.type === 'lose') {
-            color = 'Red';
-            description = `📉 **Maalesef...**\n\nSonuç: **${selectedItem.name}**\n\n*Yarın tekrar gel veya hak satın al!*`;
-        } else {
-            color = 'Blue';
-            description = `👍 **Fena Değil!**\n\nKazandığın: **${selectedItem.name}**\n*Ticket açıp indirimini kullanabilirsin.*`;
-        }
-     
-        const embed = new EmbedBuilder()
-            .setTitle('🎡 SAHO CHEATS ÇARKIFELEK')
-            .setDescription(description)
-            .setColor(color)
-            .setFooter({ text: footerText });
+
+        // ==================== DİĞER ORİJİNAL KOMUTLAR ====================
+        if (commandName === 'nuke') {
+            const channel = interaction.channel;
+            const position = channel.position;
+            const topic = channel.topic;
          
-        await interaction.editReply({ embeds: [embed] });
-    }
-    if (['vip-ekle', 'kullanici-ekle', 'olustur', 'sil', 'hwid-hak-ekle', 'durdurma-hak-ekle'].includes(commandName)) {
-        if (commandName === 'hwid-hak-ekle' || commandName === 'durdurma-hak-ekle') {
+            await interaction.reply('☢️ **Kanal patlatılıyor...**');
+         
+            const newChannel = await channel.clone();
+            await newChannel.setPosition(position);
+            if (topic) await newChannel.setTopic(topic);
+         
+            await channel.delete();
+         
+            const nukeEmbed = new EmbedBuilder()
+                .setTitle('☢️ KANAL TEMİZLENDİ')
+                .setDescription('Bu kanal **SAHO CHEATS** yönetim tarafından sıfırlandı.')
+                .setImage('https://media1.tenor.com/m/X9kZ5h7qK64AAAAC/nuclear-bomb-explosion.gif')
+                .setColor(CONFIG.ERROR_COLOR);
+             
+            return newChannel.send({ embeds: [nukeEmbed] });
+        }
+        if (commandName === 'lock') {
+            await interaction.channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false });
+            return interaction.reply({ embeds: [new EmbedBuilder().setDescription('🔒 **Kanal kilitlendi.**').setColor(CONFIG.ERROR_COLOR)] });
+        }
+        if (commandName === 'unlock') {
+            await interaction.channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: true });
+            return interaction.reply({ embeds: [new EmbedBuilder().setDescription('🔓 **Kanal kilidi açıldı.**').setColor(CONFIG.SUCCESS_COLOR)] });
+        }
+        if (commandName === 'format') {
+            const urun = options.getString('urun');
+            const ozelliklerStr = options.getString('ozellikler');
+            const ozellikler = ozelliklerStr.split(',').slice(0, 60); // Max 60
+           
+            const gorsel1 = options.getAttachment('gorsel1');
+            const gorsel2 = options.getAttachment('gorsel2');
+            const gorsel3 = options.getAttachment('gorsel3');
+            const gorsel4 = options.getAttachment('gorsel4');
+            const embeds = [];
+            const mainEmbed = new EmbedBuilder()
+                .setTitle(`💎 ${urun}`)
+                .setDescription(`> **${urun}** en güncel sürümüyle stoklarda!\n> Satın almak için: Ticket açın.`)
+                .setColor(CONFIG.GOLD_COLOR)
+                .setImage(gorsel1.url)
+                .setFooter({ text: 'SAHO CHEATS Marketplace', iconURL: guild.iconURL() });
+            let ozellikFields = '';
+            ozellikler.forEach((oz, i) => ozellikFields += `${i+1}. ${oz.trim()}\n`);
+            mainEmbed.addFields({ name: '✨ Özellikler', value: ozellikFields || 'Özellik yok.' });
+            embeds.push(mainEmbed);
+            if (gorsel2) embeds.push(new EmbedBuilder().setURL('https://discord.gg/sahocheats').setImage(gorsel2.url).setColor(CONFIG.GOLD_COLOR));
+            if (gorsel3) embeds.push(new EmbedBuilder().setURL('https://discord.gg/sahocheats').setImage(gorsel3.url).setColor(CONFIG.GOLD_COLOR));
+            if (gorsel4) embeds.push(new EmbedBuilder().setURL('https://discord.gg/sahocheats').setImage(gorsel4.url).setColor(CONFIG.GOLD_COLOR));
+            await interaction.channel.send({ embeds: embeds });
+            return interaction.reply({ content: '✅ Vitrin güncellendi!', ephemeral: true });
+        }
+        if (commandName === 'ticket-kur') {
+            const embed = new EmbedBuilder()
+                .setTitle('🔥 SAHO CHEATS | PROFESYONEL DESTEK MERKEZİ')
+                .setDescription(`
+                **Hoş Geldiniz, Değerli Müşterimiz!**
+             
+                SAHO CHEATS olarak premium hizmet sunuyoruz.
+                Aşağıdaki menüden kategorinizi seçin ve anında destek alın.
+                `)
+                .setColor(CONFIG.GOLD_COLOR)
+                .setThumbnail('https://cdn-icons-png.flaticon.com/512/4712/4712109.png')
+                .setImage('https://example.com/profesyonel-banner.gif') // Banner resim ekle
+                .setFooter({ text: 'SAHO CHEATS | Hızlı & Güvenilir Destek', iconURL: client.user.avatarURL() });
+            const menu = new StringSelectMenuBuilder()
+                .setCustomId('ticket_create_menu')
+                .setPlaceholder('📩 Destek Kategorisi Seçin...')
+                .addOptions(
+                    { label: 'Satın Alım & Fiyat Bilgisi', description: 'Ürün satın alma ve fiyatlar hakkında.', value: 'cat_buy', emoji: '💳' },
+                    { label: 'Teknik Destek & Kurulum', description: 'Yazılım kurulum ve sorun giderme.', value: 'cat_tech', emoji: '🛠️' },
+                    { label: 'Genel Sorular & Ortaklık', description: 'Diğer konular ve işbirliği.', value: 'cat_other', emoji: '🤝' }
+                );
+            const row = new ActionRowBuilder().addComponents(menu);
+            await interaction.channel.send({ embeds: [embed], components: [row] });
+            return interaction.reply({ content: '✅ Profesyonel ticket paneli kuruldu!', ephemeral: true });
+        }
+        if (commandName === 'sss') {
+            const embed = new EmbedBuilder()
+                .setTitle('❓ SIKÇA SORULAN SORULAR')
+                .setDescription('Aşağıdaki menüden merak ettiğiniz konuyu seçin.')
+                .setColor(CONFIG.INFO_COLOR)
+                .setFooter({ text: 'SAHO CHEATS Knowledge Base' });
+             
+            const menu = new StringSelectMenuBuilder()
+                .setCustomId('faq_select')
+                .setPlaceholder('Bir konu seçin...')
+                .addOptions(
+                    { label: 'Ban Riski Var Mı?', description: 'Güvenlik durumu hakkında bilgi.', value: 'faq_ban', emoji: '🛡️' },
+                    { label: 'Nasıl Satın Alırım?', description: 'Ödeme yöntemleri ve teslimat.', value: 'faq_buy', emoji: '💳' },
+                    { label: 'İade Var Mı?', description: 'İade politikamız.', value: 'faq_refund', emoji: '🔄' },
+                    { label: 'Destek Saatleri', description: 'Ne zaman cevap alabilirim?', value: 'faq_support', emoji: '⏰' },
+                    { label: 'Kurulum Zor Mu?', description: 'Teknik bilgi gerekir mi?', value: 'faq_install', emoji: '🛠️' }
+                );
+             
+            return interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
+        }
+        if (commandName === 'help') {
+            const embed = new EmbedBuilder()
+                .setTitle('📚 SAHO CHEATS | BOT YARDIM MENÜSÜ')
+                .setColor(CONFIG.EMBED_COLOR)
+                .setDescription('Botun tüm komutları aşağıda listelenmiştir.')
+                .addFields(
+                    { name: '👤 **Kullanıcı Komutları**', value: '> `/lisansim`, `/cevir`, `/sss`, `/referans`' },
+                    { name: '🛡️ **Yetkili Komutları**', value: '> `/format`, `/ticket-kur`, `/durum-guncelle`, `/loader-durum`\n> `/dm`, `/nuke`, `/lock`, `/unlock`, `/kick`, `/ban`\n> `/vip-ekle`, `/tum-lisanslar`, `/depremkur`, `/welcomer-kur`, `/welcomer-dashboard`, `/ai-kur`' }
+                )
+                .setFooter({ text: 'SAHO CHEATS Automation' });
+            return interaction.reply({ embeds: [embed], ephemeral: true });
+        }
+        if (commandName === 'tum-lisanslar') {
             await interaction.deferReply({ ephemeral: true });
             const data = await firebaseRequest('get', '');
-            if (!data) return interaction.editReply('Veri yok.');
-            const keys = Object.keys(data).filter(k => !k.startsWith("_")).slice(0, 25);
-            const adet = options.getInteger('adet');
-            const type = commandName === 'hwid-hak-ekle' ? 'hwid' : 'durdurma';
-            const menu = new StringSelectMenuBuilder()
-                .setCustomId(`add_right_${type}_${adet}`)
-                .setPlaceholder('Key Seç...')
-                .addOptions(keys.map(k => new StringSelectMenuOptionBuilder().setLabel(k).setValue(k).setEmoji('➕')));
-            interaction.editReply({ content: `👇 **${type.toUpperCase()} Ekle:**`, components: [new ActionRowBuilder().addComponents(menu)] });
-            return;
+            if (!data) return interaction.editReply('Veri bulunamadı.');
+            let text = "**📜 AKTİF LİSANSLAR LİSTESİ**\n\n";
+            let count = 0;
+            for (const [key, value] of Object.entries(data)) {
+                if (key.startsWith("_") || typeof value !== 'string') continue;
+                let parts = value.split(',');
+                if (parts[4] !== "0") {
+                    text += `🔑 \`${key}\` - <@${parts[4]}> (${parts[7] || 'NORMAL'})\n`;
+                    count++;
+                }
+            }
+            if (count === 0) text += "🚫 Hiçbir kullanıcıya lisans tanımlanmamış.";
+            const embed = new EmbedBuilder().setDescription(text.substring(0, 4000)).setColor(CONFIG.EMBED_COLOR).setFooter({ text: `Toplam ${count} aktif lisans` });
+            return interaction.editReply({ embeds: [embed] });
         }
-        if (commandName === 'sil') {
-            await interaction.deferReply({ ephemeral: true });
-            const data = await firebaseRequest('get', '');
-            if (!data) return interaction.editReply('Veri yok.');
-            const keys = Object.keys(data).filter(k => !k.startsWith("_")).slice(0, 25);
-            const menu = new StringSelectMenuBuilder()
-                .setCustomId('delete_key')
-                .setPlaceholder('Sil...')
-                .addOptions(keys.map(k => new StringSelectMenuOptionBuilder().setLabel(k).setValue(k).setEmoji('🗑️')));
-            interaction.editReply({ content: '🗑️ **Sil:**', components: [new ActionRowBuilder().addComponents(menu)] });
-            return;
+        if (commandName === 'loader-durum') {
+            loaderStatus = options.getString('durum');
+            return interaction.reply({ content: `🛡️ Loader durumu güncellendi: **${loaderStatus}**`, ephemeral: true });
         }
-        if (commandName.includes('ekle')) {
+        if (commandName === 'lisansim') {
             await interaction.deferReply({ ephemeral: true });
-            const target = options.getUser('kullanici');
-            const key = options.getString('key_ismi').toUpperCase();
-            const gun = options.getInteger('gun');
-            const isVip = commandName === 'vip-ekle';
-            const data = `bos,${gun},aktif,${new Date().toISOString().split('T')[0]},${target.id},0,0,${isVip ? 'VIP' : 'NORMAL'}`;
-            await firebaseRequest('put', key, data);
-            const payload = createPanelPayload(key, data.split(','));
-            sendLog(guild, `🚨 **LİSANS OLUŞTURULDU**\n**Yönetici:** ${user.tag}\n**Key:** ${key}`);
-            interaction.editReply({ content: `✅ **${target.username}** tanımlandı.` });
+            const result = await findUserKey(user.id);
+            if (!result) return interaction.editReply('❌ **Sisteme kayıtlı bir lisansınız bulunmamaktadır.**');
+            return interaction.editReply(createPanelPayload(result.key, result.parts));
+        }
+        if (commandName === 'dm') {
+            const targetUser = options.getUser('kullanici');
+            const msg = options.getString('mesaj');
             try {
-                await target.send({ content: `🎉 **Lisansınız Hazır!**`, embeds: payload.embeds, components: payload.components });
-            } catch (e) {}
-            return;
+                const embed = new EmbedBuilder()
+                    .setTitle('📨 SAHO CHEATS MESAJ')
+                    .setDescription(msg)
+                    .setColor(CONFIG.EMBED_COLOR)
+                    .setFooter({text:'Bu mesaj yetkililer tarafından gönderildi.'});
+                await targetUser.send({embeds: [embed]});
+                return interaction.reply({content:`✅ Mesaj **${targetUser.tag}** kullanıcısına gönderildi.`, ephemeral:true});
+            } catch (e) {
+                return interaction.reply({content:'❌ Kullanıcının DM kutusu kapalı.', ephemeral:true});
+            }
         }
-        if (commandName === 'olustur') {
-            const gun = options.getInteger('gun');
-            let key = options.getString('isim') || "KEY-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-            await firebaseRequest('put', key.toUpperCase(), `bos,${gun},aktif,${new Date().toISOString().split('T')[0]},0,0,0,NORMAL`);
-            interaction.reply({ content: `🔑 **Boş Key:** \`${key.toUpperCase()}\``, ephemeral: true });
+        if (commandName === 'kick') {
+            const targetUser = options.getUser('kullanici');
+            const reason = options.getString('sebep') || 'Sebep belirtilmedi';
+            const member = guild.members.cache.get(targetUser.id);
+            if (!member) return interaction.reply({content:'Kullanıcı sunucuda bulunamadı.', ephemeral:true});
+            if (!member.kickable) return interaction.reply({content:'Bu kullanıcıyı atamam (Yetkim yetersiz).', ephemeral:true});
+            await member.kick(reason);
+            const embed = new EmbedBuilder()
+                .setTitle('👢 KICK İŞLEMİ')
+                .setDescription(`**Atılan:** ${targetUser.tag}\n**Sebep:** ${reason}\n**Yetkili:** ${user.tag}`)
+                .setColor(CONFIG.ERROR_COLOR);
+            return interaction.reply({embeds: [embed]});
         }
+        if (commandName === 'ban') {
+            const targetUser = options.getUser('kullanici');
+            const reason = options.getString('sebep') || 'Sebep yok';
+            const member = guild.members.cache.get(targetUser.id);
+            if (!member) return interaction.reply({ content: '❌ Kullanıcı yok.', ephemeral: true });
+            if (!member.bannable) return interaction.reply({ content: '❌ Yasaklayamıyorum.', ephemeral: true });
+            await member.ban({ reason: reason });
+            return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🔨 YASAKLAMA').setDescription(`**Yasaklanan:** ${targetUser.tag}\n**Sebep:** ${reason}`).setColor(CONFIG.ERROR_COLOR)] });
+        }
+        if (commandName === 'unban') {
+            const targetId = options.getString('id');
+            try {
+                await guild.members.unban(targetId);
+                return interaction.reply({ content: `✅ **${targetId}** yasağı kaldırıldı.`, ephemeral: true });
+            } catch (error) {
+                return interaction.reply({ content: '❌ Hata.', ephemeral: true });
+            }
+        }
+        if (commandName === 'bakim-modu') {
+            isMaintenanceEnabled = options.getBoolean('durum');
+            return interaction.reply({content: `🔒 Bakım: ${isMaintenanceEnabled}`, ephemeral:true});
+        }
+        if (commandName === 'temizle') {
+            const amount = options.getInteger('sayi');
+            await interaction.channel.bulkDelete(amount, true).catch(() => {});
+            return interaction.reply({ content: `🧹 **${amount}** mesaj silindi.`, ephemeral: true });
+        }
+        if (commandName === 'duyuru') {
+            const mesaj = options.getString('mesaj');
+            const targetChannel = options.getChannel('kanal') || interaction.channel;
+            const embed = new EmbedBuilder()
+                .setTitle('📢 SAHO CHEATS DUYURU')
+                .setDescription(mesaj)
+                .setColor(CONFIG.EMBED_COLOR)
+                .setFooter({ text: guild.name })
+                .setTimestamp();
+            await targetChannel.send({ content: '@everyone', embeds: [embed] });
+            return interaction.reply({ content: '✅', ephemeral: true });
+        }
+        if (commandName === 'sunucu-bilgi') {
+            const embed = new EmbedBuilder()
+                .setTitle(`📊 ${guild.name}`)
+                .addFields(
+                    { name: '👥 Üye', value: `${guild.memberCount}`, inline: true }
+                )
+                .setColor(CONFIG.EMBED_COLOR);
+            return interaction.reply({ embeds: [embed] });
+        }
+        if (commandName === 'karaliste-ekle') {
+            const target = options.getUser('kullanici');
+            await firebaseRequest('patch', '_BLACKLIST_', { [target.id]: "BAN" });
+            return interaction.reply({ content: `⛔ **${target.tag}** engellendi.`, ephemeral: true });
+        }
+        if (commandName === 'karaliste-cikar') {
+            const target = options.getUser('kullanici');
+            const url = `${CONFIG.FIREBASE_URL}_BLACKLIST_/${target.id}.json?auth=${CONFIG.FIREBASE_SECRET}`;
+            await axios.delete(url);
+            return interaction.reply({ content: `✅ **${target.tag}** engeli kalktı.`, ephemeral: true });
+        }
+        if (commandName === 'durum-guncelle') {
+            const urun = options.getString('urun');
+            const durum = options.getString('durum');
+            let color, statusText, emoji;
+            if (durum === 'safe') { color = 'Green'; statusText = 'SAFE / GÜVENLİ'; emoji = '🟢'; }
+            else if (durum === 'detected') { color = 'Red'; statusText = 'DETECTED / RİSKLİ'; emoji = '🔴'; }
+            else { color = 'Yellow'; statusText = 'UPDATING / BAKIMDA'; emoji = '🟡'; }
+            const embed = new EmbedBuilder()
+                .setTitle(`${emoji} DURUM BİLGİSİ`)
+                .addFields(
+                    { name: '📂 Yazılım', value: `**${urun}**`, inline: true },
+                    { name: '📡 Durum', value: `\`${statusText}\``, inline: true }
+                )
+                .setColor(color)
+                .setFooter({ text: 'SAHO CHEATS Status' });
+            await interaction.channel.send({ embeds: [embed] });
+            return interaction.reply({ content: '✅', ephemeral: true });
+        }
+        if (commandName === 'cark-hak-ekle') {
+            const target = options.getUser('kullanici');
+            const adet = options.getInteger('adet');
+            let currentRight = await firebaseRequest('get', `_SPIN_RIGHTS_/${target.id}`);
+            if (!currentRight) currentRight = 0; else currentRight = parseInt(currentRight);
+            await firebaseRequest('put', `_SPIN_RIGHTS_/${target.id}`, currentRight + adet);
+            return interaction.reply({ content: `✅ **${target.tag}** kullanıcısına **+${adet}** hak eklendi.`, ephemeral: true });
+        }
+        if (commandName === 'cark-oranlar') {
+            const embed = new EmbedBuilder()
+                .setTitle('🎡 SAHO CHEATS | ORANLAR')
+                .setDescription('💎 %0.5 External\n🔥 %1.5 Bypass\n👑 %3.0 Mod Menü\n🎫 %10 İndirim\n❌ %85 PAS')
+                .setColor('Gold');
+            return interaction.reply({ embeds: [embed] });
+        }
+        if (commandName === 'referans') {
+            const puan = options.getInteger('puan');
+            const yorum = options.getString('yorum');
+            const stars = '⭐'.repeat(puan);
+            const embed = new EmbedBuilder()
+                .setAuthor({ name: `${user.username} referans bıraktı!`, iconURL: user.displayAvatarURL() })
+                .setDescription(`**Puan:** ${stars}\n**Yorum:** ${yorum}`)
+                .setColor('Gold');
+            const vouchChannel = guild.channels.cache.find(c => c.name.includes('referans') || c.name.includes('vouch'));
+            if (vouchChannel) {
+                await vouchChannel.send({ embeds: [embed] });
+                return interaction.reply({ content: '❤️', ephemeral: true });
+            } else return interaction.reply({ content: 'Kanal bulunamadı.', ephemeral: true });
+        }
+        if (commandName === 'cevir') {
+            await interaction.deferReply();
+            let extraRights = await firebaseRequest('get', `_SPIN_RIGHTS_/${user.id}`);
+            if (!extraRights) extraRights = 0; else extraRights = parseInt(extraRights);
+         
+            let usedExtra = false;
+            if (extraRights > 0) {
+                extraRights--;
+                await firebaseRequest('put', `_SPIN_RIGHTS_/${user.id}`, extraRights);
+                usedExtra = true;
+            } else {
+                const spinData = await firebaseRequest('get', `_SPIN_TIMES_/${user.id}`);
+                const now = Date.now();
+                const cooldown = 24 * 60 * 60 * 1000;
+                if (spinData) {
+                    const lastSpin = parseInt(spinData);
+                    if (now - lastSpin < cooldown) return interaction.editReply(`⏳ **Günlük hakkın doldu!**\nTekrar denemek için: <t:${Math.floor((lastSpin + cooldown) / 1000)}:R>`);
+                }
+                await firebaseRequest('patch', '_SPIN_TIMES_', { [user.id]: now });
+            }
+            const items = [
+                { name: "1 AYLIK EXTERNAL 💎", chance: 5, type: 'legendary' },
+                { name: "1 HAFTALIK BYPASS 🔥", chance: 15, type: 'epic' },
+                { name: "1 GÜNLÜK MOD MENU 👑", chance: 30, type: 'rare' },
+                { name: "%10 İndirim Kuponu 🎫", chance: 100, type: 'common' },
+                { name: "PAS (Tekrar Dene) ❌", chance: 850, type: 'lose' }
+            ];
+            const totalWeight = items.reduce((sum, item) => sum + item.chance, 0);
+            let random = Math.floor(Math.random() * totalWeight);
+            let selectedItem = items[0];
+            for (const item of items) {
+                if (random < item.chance) {
+                    selectedItem = item;
+                    break;
+                }
+                random -= item.chance;
+            }
+            let color = CONFIG.EMBED_COLOR;
+            let description = "";
+            let footerText = usedExtra ? `Ekstra hak kullanıldı. Kalan: ${extraRights}` : `${user.username} günlük hakkını kullandı`;
+            if (selectedItem.type === 'legendary' || selectedItem.type === 'epic' || selectedItem.type === 'rare') {
+                color = 'Gold';
+                description = `🎉 **TEBRİKLER! ÖDÜL KAZANDIN!**\n\nKazandığın: **${selectedItem.name}**\n\n*Hemen ticket aç ve bu ekranın görüntüsünü at!*`;
+            } else if (selectedItem.type === 'lose') {
+                color = 'Red';
+                description = `📉 **Maalesef...**\n\nSonuç: **${selectedItem.name}**\n\n*Yarın tekrar gel veya hak satın al!*`;
+            } else {
+                color = 'Blue';
+                description = `👍 **Fena Değil!**\n\nKazandığın: **${selectedItem.name}**\n*Ticket açıp indirimini kullanabilirsin.*`;
+            }
+         
+            const embed = new EmbedBuilder()
+                .setTitle('🎡 SAHO CHEATS ÇARKIFELEK')
+                .setDescription(description)
+                .setColor(color)
+                .setFooter({ text: footerText });
+             
+            return interaction.editReply({ embeds: [embed] });
+        }
+        if (['vip-ekle', 'kullanici-ekle', 'olustur', 'sil', 'hwid-hak-ekle', 'durdurma-hak-ekle'].includes(commandName)) {
+            if (commandName === 'hwid-hak-ekle' || commandName === 'durdurma-hak-ekle') {
+                await interaction.deferReply({ ephemeral: true });
+                const data = await firebaseRequest('get', '');
+                if (!data) return interaction.editReply('Veri yok.');
+                const keys = Object.keys(data).filter(k => !k.startsWith("_")).slice(0, 25);
+                const adet = options.getInteger('adet');
+                const type = commandName === 'hwid-hak-ekle' ? 'hwid' : 'durdurma';
+                const menu = new StringSelectMenuBuilder()
+                    .setCustomId(`add_right_${type}_${adet}`)
+                    .setPlaceholder('Key Seç...')
+                    .addOptions(keys.map(k => new StringSelectMenuOptionBuilder().setLabel(k).setValue(k).setEmoji('➕')));
+                return interaction.editReply({ content: `👇 **${type.toUpperCase()} Ekle:**`, components: [new ActionRowBuilder().addComponents(menu)] });
+            }
+            if (commandName === 'sil') {
+                await interaction.deferReply({ ephemeral: true });
+                const data = await firebaseRequest('get', '');
+                if (!data) return interaction.editReply('Veri yok.');
+                const keys = Object.keys(data).filter(k => !k.startsWith("_")).slice(0, 25);
+                const menu = new StringSelectMenuBuilder()
+                    .setCustomId('delete_key')
+                    .setPlaceholder('Sil...')
+                    .addOptions(keys.map(k => new StringSelectMenuOptionBuilder().setLabel(k).setValue(k).setEmoji('🗑️')));
+                return interaction.editReply({ content: '🗑️ **Sil:**', components: [new ActionRowBuilder().addComponents(menu)] });
+            }
+            if (commandName.includes('ekle')) {
+                await interaction.deferReply({ ephemeral: true });
+                const target = options.getUser('kullanici');
+                const key = options.getString('key_ismi').toUpperCase();
+                const gun = options.getInteger('gun');
+                const isVip = commandName === 'vip-ekle';
+                const data = `bos,${gun},aktif,${new Date().toISOString().split('T')[0]},${target.id},0,0,${isVip ? 'VIP' : 'NORMAL'}`;
+                await firebaseRequest('put', key, data);
+                const payload = createPanelPayload(key, data.split(','));
+                sendLog(guild, `🚨 **LİSANS OLUŞTURULDU**\n**Yönetici:** ${user.tag}\n**Key:** ${key}`);
+                await interaction.editReply({ content: `✅ **${target.username}** tanımlandı.` });
+                try {
+                    await target.send({ content: `🎉 **Lisansınız Hazır!**`, embeds: payload.embeds, components: payload.components });
+                } catch (e) {}
+                return;
+            }
+            if (commandName === 'olustur') {
+                const gun = options.getInteger('gun');
+                let key = options.getString('isim') || "KEY-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+                await firebaseRequest('put', key.toUpperCase(), `bos,${gun},aktif,${new Date().toISOString().split('T')[0]},0,0,0,NORMAL`);
+                return interaction.reply({ content: `🔑 **Boş Key:** \`${key.toUpperCase()}\``, ephemeral: true });
+            }
+        }
+    } catch (error) {
+        console.error("Komut işlenirken hata oluştu:", error);
     }
 }
 
 // =============================================================================
-// 8. BUTON HANDLER
+// 8. BUTON HANDLER VE TICKET ARŞİV SİSTEMİ
 // =============================================================================
 async function handleButton(interaction) {
     const { customId, user, guild, channel } = interaction;
-    if (customId === 'close_ticket') {
-        const modal = new EmbedBuilder()
-            .setDescription('🔒 **Ticket 5 saniye içinde kapatılıyor...**')
-            .setColor(CONFIG.ERROR_COLOR);
-        interaction.reply({ embeds: [modal] });
-        sendLog(guild, `📕 **TICKET KAPANDI**\n**Kapatan:** ${user.tag}\n**Kanal:** ${channel.name}`);
-        setTimeout(() => channel.delete().catch(() => {}), 5000);
-    }
-    else if (customId === 'claim_ticket') {
-        if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageChannels))
-            return interaction.reply({ content: '⛔ Yetkisiz!', ephemeral: true });
-        channel.send({ embeds: [new EmbedBuilder()
-            .setDescription(`✅ Bu talep **${user}** tarafından devralındı.`)
-            .setColor(CONFIG.SUCCESS_COLOR)] });
-    }
-    if (['toggle', 'reset'].includes(customId)) {
-        await interaction.deferReply({ ephemeral: true });
-        const result = await findUserKey(user.id);
-        if (!result) return interaction.editReply('❌ Lisans yok.');
-     
-        let { key, parts } = result;
-        while (parts.length < 8) parts.push("0");
-        const isVIP = parts[7] === 'VIP';
-        const LIMITS = {
-            PAUSE: isVIP ? CONFIG.VIP_PAUSE_LIMIT : CONFIG.DEFAULT_PAUSE_LIMIT,
-            RESET: isVIP ? CONFIG.VIP_RESET_LIMIT : CONFIG.DEFAULT_RESET_LIMIT
-        };
-        let [durum, pause, reset] = [parts[2], parseInt(parts[5]), parseInt(parts[6])];
-        if (customId === 'toggle') {
-            if (durum === 'aktif') {
-                if (!isVIP && pause >= LIMITS.PAUSE) return interaction.editReply('❌ Limit doldu.');
-                durum = 'pasif'; pause++;
-            } else durum = 'aktif';
-            parts[2] = durum; parts[5] = pause;
+    try {
+        if (customId === 'close_ticket') {
+            await interaction.reply({ embeds: [new EmbedBuilder().setDescription('🔒 **Ticket kapatılıyor ve arşivleniyor...**').setColor(CONFIG.ERROR_COLOR)] });
+
+            // Arşivleme İşlemi (Gelişmiş Döküm)
+            try {
+                const messages = await channel.messages.fetch({ limit: 100 });
+                const archiveChannel = client.channels.cache.get(CONFIG.ARCHIVE_CHANNEL_ID);
+                if (archiveChannel) {
+                    let transcript = messages.reverse().map(m => `[${m.createdAt.toLocaleTimeString()}] ${m.author.tag}: ${m.content}`).join('\n');
+                    if (transcript.length > 4000) transcript = transcript.substring(0, 3995) + '...';
+                    
+                    const archiveEmbed = new EmbedBuilder()
+                        .setTitle(`📁 TICKET ARŞİVİ: ${channel.name}`)
+                        .setDescription(`**Kapatan:** ${user.tag}\n\n**Mesaj Geçmişi:**\n\`\`\`text\n${transcript || "Mesaj yok."}\n\`\`\``)
+                        .setColor(CONFIG.INFO_COLOR)
+                        .setTimestamp();
+                    await archiveChannel.send({ embeds: [archiveEmbed] });
+                }
+            } catch (err) {
+                console.error("Ticket arşivlenirken hata:", err);
+            }
+
+            sendLog(guild, `📕 **TICKET ARŞİVLENDİ VE KAPATILDI**\n**Kapatan:** ${user.tag}\n**Kanal:** ${channel.name}`);
+            setTimeout(() => channel.delete().catch(() => {}), 4000);
+            return;
         }
-        else if (customId === 'reset') {
-            if (reset >= LIMITS.RESET) return interaction.editReply('❌ Limit doldu.');
-            parts[0] = 'bos'; reset++; parts[6] = reset;
-            sendLog(guild, `🔄 **HWID SIFIRLANDI**\n**Kullanıcı:** ${user.tag}\n**Key:** ${key}`);
-            interaction.editReply('✅ HWID Sıfırlandı!');
+        else if (customId === 'claim_ticket') {
+            if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageChannels))
+                return interaction.reply({ content: '⛔ Yetkisiz!', ephemeral: true });
+            return channel.send({ embeds: [new EmbedBuilder()
+                .setDescription(`✅ Bu talep **${user}** tarafından devralındı.`)
+                .setColor(CONFIG.SUCCESS_COLOR)] });
         }
-        await firebaseRequest('put', key, parts.join(','));
-        await interaction.editReply(createPanelPayload(key, parts));
+        
+        if (['toggle', 'reset'].includes(customId)) {
+            await interaction.deferReply({ ephemeral: true });
+            const result = await findUserKey(user.id);
+            if (!result) return interaction.editReply('❌ Lisans yok.');
+         
+            let { key, parts } = result;
+            while (parts.length < 8) parts.push("0");
+            const isVIP = parts[7] === 'VIP';
+            const LIMITS = {
+                PAUSE: isVIP ? CONFIG.VIP_PAUSE_LIMIT : CONFIG.DEFAULT_PAUSE_LIMIT,
+                RESET: isVIP ? CONFIG.VIP_RESET_LIMIT : CONFIG.DEFAULT_RESET_LIMIT
+            };
+            let [durum, pause, reset] = [parts[2], parseInt(parts[5]), parseInt(parts[6])];
+            
+            if (customId === 'toggle') {
+                if (durum === 'aktif') {
+                    if (!isVIP && pause >= LIMITS.PAUSE) return interaction.editReply('❌ Limit doldu.');
+                    durum = 'pasif'; pause++;
+                } else durum = 'aktif';
+                parts[2] = durum; parts[5] = pause;
+            }
+            else if (customId === 'reset') {
+                if (reset >= LIMITS.RESET) return interaction.editReply('❌ Limit doldu.');
+                parts[0] = 'bos'; reset++; parts[6] = reset;
+                sendLog(guild, `🔄 **HWID SIFIRLANDI**\n**Kullanıcı:** ${user.tag}\n**Key:** ${key}`);
+                interaction.editReply('✅ HWID Sıfırlandı!');
+            }
+            await firebaseRequest('put', key, parts.join(','));
+            return interaction.editReply(createPanelPayload(key, parts));
+        }
+    } catch (err) {
+        console.error("Buton hatası:", err);
     }
 }
 
 // =============================================================================
-// 9. SELECT MENU HANDLER
+// 9. SELECT MENU HANDLER (ÇİFT CEVAP HATASI GİDERİLDİ)
 // =============================================================================
 async function handleSelectMenu(interaction) {
     const { customId, values, user, guild } = interaction;
-    if (customId === 'welcomer_toggle') {
-        const settingKey = values[0];
-        const settings = await getWelcomeSettings(guild.id);
-        settings[settingKey] = !settings[settingKey];
-        await setWelcomeSettings(guild.id, settings);
-        interaction.reply({ content: `✅ **${settingKey}** ayarı ${settings[settingKey] ? 'açıldı' : 'kapatıldı'}!`, ephemeral: true });
-        return;
-    }
-    if (customId === 'ticket_create_menu') {
-        const category = values[0];
-        if (isMaintenanceEnabled && !await checkPermission(user.id))
-            return interaction.reply({ content: '🔒 Bakımdayız.', ephemeral: true });
-        await interaction.deferReply({ ephemeral: true });
-     
-        const ticketNum = await getNextTicketNumber();
-        const typePrefix = category.split('_')[1];
-        const channelName = `${typePrefix}-${ticketNum}-${user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
-        const ticketChannel = await guild.channels.create({
-            name: channelName,
-            type: ChannelType.GuildText,
-            parent: interaction.channel.parentId,
-            permissionOverwrites: [
-                { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                { id: user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-                { id: CONFIG.MASTER_VIEW_ID, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ManageChannels] }
-            ]
-        });
-        const controlEmbed = new EmbedBuilder()
-            .setTitle('👋 Profesyonel Destek Talebiniz Alındı')
-            .setDescription(`Merhaba **${user}**,\n\nKategori: **${typePrefix.toUpperCase()}**\nEkibimiz kısa sürede yardımcı olacak.\nLütfen sorununuzu detaylı anlatın.`)
-            .setColor(CONFIG.GOLD_COLOR)
-            .setThumbnail(user.displayAvatarURL());
-        const controlRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('close_ticket').setLabel('Kapat & Arşivle').setStyle(ButtonStyle.Danger).setEmoji('🔒'),
-            new ButtonBuilder().setCustomId('claim_ticket').setLabel('Yetkili: Sahiplen').setStyle(ButtonStyle.Success).setEmoji('🙋‍♂️')
-        );
-        if (category === 'cat_buy') {
-            const productMenu = new StringSelectMenuBuilder()
-                .setCustomId('select_product')
-                .setPlaceholder('📦 Hangi ürünü almak istiyorsunuz?')
-                .addOptions(
-                    { label: 'PC UID Bypass', value: 'prod_uid', emoji: '🛡️' },
-                    { label: 'PC External', value: 'prod_external', emoji: '🔮' },
-                    { label: 'PC Mod Menü', value: 'prod_modmenu', emoji: '👑' },
-                    { label: 'PC Fake Lag', value: 'prod_fakelag', emoji: '💨' },
-                    { label: 'Android Fake Lag', value: 'prod_android', emoji: '📱' }
-                );
+    try {
+        if (customId === 'welcomer_toggle') {
+            const settingKey = values[0];
+            const settings = await getWelcomeSettings(guild.id);
+            settings[settingKey] = !settings[settingKey];
+            await setWelcomeSettings(guild.id, settings);
+            return interaction.reply({ content: `✅ **${settingKey}** ayarı ${settings[settingKey] ? 'açıldı' : 'kapatıldı'}!`, ephemeral: true });
+        }
+        
+        if (customId === 'ticket_create_menu') {
+            const category = values[0];
+            if (isMaintenanceEnabled && !await checkPermission(user.id))
+                return interaction.reply({ content: '🔒 Bakımdayız.', ephemeral: true });
+            
+            await interaction.deferReply({ ephemeral: true });
          
-            await ticketChannel.send({
-                content: `${user} | <@&${CONFIG.SUPPORT_ROLE_ID}>`,
-                embeds: [controlEmbed],
-                components: [new ActionRowBuilder().addComponents(productMenu), controlRow]
+            const ticketNum = await getNextTicketNumber();
+            const typePrefix = category.split('_')[1];
+            const channelName = `${typePrefix}-${ticketNum}-${user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
+            const ticketChannel = await guild.channels.create({
+                name: channelName,
+                type: ChannelType.GuildText,
+                parent: interaction.channel.parentId,
+                permissionOverwrites: [
+                    { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+                    { id: user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+                    { id: CONFIG.MASTER_VIEW_ID, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ManageChannels] }
+                ]
             });
-        } else {
-            await ticketChannel.send({
-                content: `${user} | <@&${CONFIG.SUPPORT_ROLE_ID}>`,
-                embeds: [controlEmbed],
-                components: [controlRow]
+            
+            const controlEmbed = new EmbedBuilder()
+                .setTitle('👋 Profesyonel Destek Talebiniz Alındı')
+                .setDescription(`Merhaba **${user}**,\n\nKategori: **${typePrefix.toUpperCase()}**\nEkibimiz kısa sürede yardımcı olacak.\nLütfen sorununuzu detaylı anlatın.`)
+                .setColor(CONFIG.GOLD_COLOR)
+                .setThumbnail(user.displayAvatarURL());
+            const controlRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('close_ticket').setLabel('Kapat & Arşivle').setStyle(ButtonStyle.Danger).setEmoji('🔒'),
+                new ButtonBuilder().setCustomId('claim_ticket').setLabel('Yetkili: Sahiplen').setStyle(ButtonStyle.Success).setEmoji('🙋‍♂️')
+            );
+            
+            if (category === 'cat_buy') {
+                const productMenu = new StringSelectMenuBuilder()
+                    .setCustomId('select_product')
+                    .setPlaceholder('📦 Hangi ürünü almak istiyorsunuz?')
+                    .addOptions(
+                        { label: 'PC UID Bypass', value: 'prod_uid', emoji: '🛡️' },
+                        { label: 'PC External', value: 'prod_external', emoji: '🔮' },
+                        { label: 'PC Mod Menü', value: 'prod_modmenu', emoji: '👑' },
+                        { label: 'PC Fake Lag', value: 'prod_fakelag', emoji: '💨' },
+                        { label: 'Android Fake Lag', value: 'prod_android', emoji: '📱' }
+                    );
+             
+                await ticketChannel.send({
+                    content: `${user} | <@&${CONFIG.SUPPORT_ROLE_ID}>`,
+                    embeds: [controlEmbed],
+                    components: [new ActionRowBuilder().addComponents(productMenu), controlRow]
+                });
+            } else {
+                await ticketChannel.send({
+                    content: `${user} | <@&${CONFIG.SUPPORT_ROLE_ID}>`,
+                    embeds: [controlEmbed],
+                    components: [controlRow]
+                });
+            }
+            return interaction.editReply(`✅ Ticket açıldı: ${ticketChannel}`);
+        }
+        
+        if (customId === 'faq_select') {
+            const val = values[0];
+            let title, desc;
+            switch(val) {
+                case 'faq_ban': title = '🛡️ Ban Riski Var Mı?'; desc = 'Yazılımlarımız %100 External ve güvenlidir. Ancak her hilede olduğu gibi düşük de olsa risk vardır. Legit (belli etmeden) oynarsanız sorun yaşamazsınız.'; break;
+                case 'faq_buy': title = '💳 Nasıl Satın Alırım?'; desc = 'Satın almak için `#ticket-kur` kanalından "Satın Alım" ticketı oluşturun. IBAN, Papara ve Kripto kabul ediyoruz.'; break;
+                case 'faq_refund': title = '🔄 İade Var Mı?'; desc = 'Dijital ürünlerde (Key teslim edildikten sonra) iade mümkün değildir. Ancak ürün bizden kaynaklı çalışmazsa iade yapılır.'; break;
+                case 'faq_support': title = '⏰ Destek Saatleri'; desc = 'Otomatik sistemimiz 7/24 aktiftir. Yetkili ekibimiz genellikle 10:00 - 02:00 saatleri arasında canlı destek verir.'; break;
+                case 'faq_install': title = '🛠️ Kurulum Zor Mu?'; desc = 'Hayır! Tek tıkla çalışan Loader sistemimiz mevcuttur. Ayrıca satın alım sonrası kurulum videosu iletmekteyiz.'; break;
+            }
+            return interaction.reply({
+                embeds: [new EmbedBuilder().setTitle(title).setDescription(desc).setColor(CONFIG.SUCCESS_COLOR)],
+                ephemeral: true
             });
         }
-        await interaction.editReply(`✅ Ticket açıldı: ${ticketChannel}`);
-    }
-    if (interaction.customId === 'faq_select') {
-        const val = interaction.values[0];
-        let title, desc;
-        switch(val) {
-            case 'faq_ban': title = '🛡️ Ban Riski Var Mı?'; desc = 'Yazılımlarımız %100 External ve güvenlidir. Ancak her hilede olduğu gibi düşük de olsa risk vardır. Legit (belli etmeden) oynarsanız sorun yaşamazsınız.'; break;
-            case 'faq_buy': title = '💳 Nasıl Satın Alırım?'; desc = 'Satın almak için `#ticket-kur` kanalından "Satın Alım" ticketı oluşturun. IBAN, Papara ve Kripto kabul ediyoruz.'; break;
-            case 'faq_refund': title = '🔄 İade Var Mı?'; desc = 'Dijital ürünlerde (Key teslim edildikten sonra) iade mümkün değildir. Ancak ürün bizden kaynaklı çalışmazsa iade yapılır.'; break;
-            case 'faq_support': title = '⏰ Destek Saatleri'; desc = 'Otomatik sistemimiz 7/24 aktiftir. Yetkili ekibimiz genellikle 10:00 - 02:00 saatleri arasında canlı destek verir.'; break;
-            case 'faq_install': title = '🛠️ Kurulum Zor Mu?'; desc = 'Hayır! Tek tıkla çalışan Loader sistemimiz mevcuttur. Ayrıca satın alım sonrası kurulum videosu iletmekteyiz.'; break;
-        }
-        await interaction.reply({
-            embeds: [new EmbedBuilder()
+        
+        if (customId === 'select_product') {
+            await interaction.deferReply({ ephemeral: true });
+            const val = values[0];
+            let title = "", priceInfo = "";
+            switch(val) {
+                case 'prod_uid': title = "🛡️ PC UID BYPASS"; priceInfo = "**📆 Haftalık:** 600₺\n**🗓️ Aylık:** 1500₺\n\n*Ban riskini ortadan kaldıran bypass.*"; break;
+                case 'prod_external': title = "🔮 PC EXTERNAL"; priceInfo = "**📆 Haftalık:** 600₺\n**🗓️ Aylık:** 1500₺\n\n*Güvenli external yazılım.*"; break;
+                case 'prod_modmenu': title = "👑 PC MOD MENÜ"; priceInfo = "**📆 Haftalık:** 700₺\n**🗓️ Aylık:** 2000₺\n\n*Full özellikli mod menü.*"; break;
+                case 'prod_fakelag': title = "💨 PC FAKE Lag"; priceInfo = "**📆 Haftalık:** 200₺\n**♾️ SINIRSIZ:** 500₺\n\n*Laglı görünme sistemi.*"; break;
+                case 'prod_android': title = "📱 ANDROID FAKE LAG"; priceInfo = "**🗓️ Aylık:** 800₺\n\n*Mobil özel.*"; break;
+            }
+            const embed = new EmbedBuilder()
                 .setTitle(title)
-                .setDescription(desc)
-                .setColor(CONFIG.SUCCESS_COLOR)],
-            ephemeral: true
-        });
-    }
-    if (interaction.customId === 'select_product') {
-        await interaction.deferReply({ ephemeral: true });
-        const val = interaction.values[0];
-        let title = "", priceInfo = "";
-        switch(val) {
-            case 'prod_uid': title = "🛡️ PC UID BYPASS"; priceInfo = "**📆 Haftalık:** 600₺\n**🗓️ Aylık:** 1500₺\n\n*Ban riskini ortadan kaldıran bypass.*"; break;
-            case 'prod_external': title = "🔮 PC EXTERNAL"; priceInfo = "**📆 Haftalık:** 600₺\n**🗓️ Aylık:** 1500₺\n\n*Güvenli external yazılım.*"; break;
-            case 'prod_modmenu': title = "👑 PC MOD MENÜ"; priceInfo = "**📆 Haftalık:** 700₺\n**🗓️ Aylık:** 2000₺\n\n*Full özellikli mod menü.*"; break;
-            case 'prod_fakelag': title = "💨 PC FAKE LAG"; priceInfo = "**📆 Haftalık:** 200₺\n**♾️ SINIRSIZ:** 500₺\n\n*Laglı görünme sistemi.*"; break;
-            case 'prod_android': title = "📱 ANDROID FAKE LAG"; priceInfo = "**🗓️ Aylık:** 800₺\n\n*Mobil özel.*"; break;
+                .setDescription(`${priceInfo}\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n💳 **SATIN ALMAK İÇİN:**\nLütfen bu kanala **IBAN** veya **PAPARA** yazarak ödeme bilgilerini isteyiniz.`)
+                .setColor(CONFIG.EMBED_COLOR)
+                .setThumbnail('https://cdn-icons-png.flaticon.com/512/2543/2543369.png');
+            return interaction.editReply({ embeds: [embed] });
         }
-        const embed = new EmbedBuilder()
-            .setTitle(title)
-            .setDescription(`${priceInfo}\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n💳 **SATIN ALMAK İÇİN:**\nLütfen bu kanala **IBAN** veya **PAPARA** yazarak ödeme bilgilerini isteyiniz.`)
-            .setColor(CONFIG.EMBED_COLOR)
-            .setThumbnail('https://cdn-icons-png.flaticon.com/512/2543/2543369.png');
-        await interaction.editReply({ embeds: [embed] });
-        return;
-    }
-    if (interaction.customId === 'delete_key' || interaction.customId.startsWith('add_right_')) {
-        if (!await checkPermission(interaction.user.id))
-            return interaction.reply({ content: '⛔ Yetkisiz.', ephemeral: true });
-         
-        const key = interaction.values[0];
-        if (interaction.customId === 'delete_key') {
-            await interaction.deferUpdate();
-            await firebaseRequest('delete', key);
-            interaction.editReply({ content: `✅ **${key}** silindi!`, components: [] });
-        } else {
-            await interaction.deferUpdate();
-            const [_, __, type, amountStr] = interaction.customId.split('_');
-            const amount = parseInt(amountStr);
-            const raw = await firebaseRequest('get', key);
-            if (raw) {
-                let p = raw.split(',');
-                while (p.length < 8) p.push("0");
-                let idx = type === 'hwid' ? 6 : 5;
-                p[idx] = Math.max(0, parseInt(p[idx]) - amount);
-                await firebaseRequest('put', key, p.join(','));
-                sendLog(interaction.guild, `➕ **HAK EKLENDİ**\n**Admin:** ${interaction.user.tag}\n**Key:** ${key}\n**Miktar:** +${amount} ${type}`);
-                interaction.editReply({ content: `✅ **${key}** için +${amount} **${type.toUpperCase()}** hakkı eklendi.`, components: [] });
-            } else interaction.editReply({ content: '❌ Key bulunamadı.', components: [] });
+        
+        if (customId === 'delete_key' || customId.startsWith('add_right_')) {
+            if (!await checkPermission(interaction.user.id))
+                return interaction.reply({ content: '⛔ Yetkisiz.', ephemeral: true });
+             
+            const key = values[0];
+            if (customId === 'delete_key') {
+                await interaction.deferUpdate();
+                await firebaseRequest('delete', key);
+                return interaction.editReply({ content: `✅ **${key}** silindi!`, components: [] });
+            } else {
+                await interaction.deferUpdate();
+                const [_, __, type, amountStr] = customId.split('_');
+                const amount = parseInt(amountStr);
+                const raw = await firebaseRequest('get', key);
+                if (raw) {
+                    let p = raw.split(',');
+                    while (p.length < 8) p.push("0");
+                    let idx = type === 'hwid' ? 6 : 5;
+                    p[idx] = Math.max(0, parseInt(p[idx]) - amount);
+                    await firebaseRequest('put', key, p.join(','));
+                    sendLog(interaction.guild, `➕ **HAK EKLENDİ**\n**Admin:** ${user.tag}\n**Key:** ${key}\n**Miktar:** +${amount} ${type}`);
+                    return interaction.editReply({ content: `✅ **${key}** için +${amount} **${type.toUpperCase()}** hakkı eklendi.`, components: [] });
+                } else return interaction.editReply({ content: '❌ Key bulunamadı.', components: [] });
+            }
         }
+    } catch (err) {
+        console.error("Select Menu Hatası:", err);
     }
 }
 
 // =============================================================================
-// 10. CRASH ENGELLEYİCİ
+// 10. CRASH ENGELLEYİCİ - ZIRH SİSTEMİ (BOTUN ASLA KAPANMAYACAK)
 // =============================================================================
 process.on('unhandledRejection', error => {
-    console.error('Beklenmeyen Hata:', error);
+    console.error('⚠️ [CRASH ÖNLENDİ] Unhandled Rejection yakalandı:', error.message || error);
+});
+
+process.on('uncaughtException', error => {
+    console.error('🚨 [CRASH ÖNLENDİ] Uncaught Exception yakalandı:', error.message || error);
 });
 
 client.login(process.env.TOKEN);

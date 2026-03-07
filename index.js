@@ -113,6 +113,11 @@ const client = new Client({
 // 3. KOMUT LİSTESİ
 // =============================================================================
 const commands = [
+    // --- YENİ EKLENEN SİSTEM KOMUTLARI ---
+    new SlashCommandBuilder().setName('ping').setDescription('🏓 Botun ve API\'nin anlık gecikme süresini (ms) gösterir.'),
+    new SlashCommandBuilder().setName('guncelle').setDescription('🔄 (Admin) Botu yeniden başlatır, komutları günceller ve optimize eder.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
     // ------------------- VİTRİN VE ÜRÜN YÖNETİMİ -------------------
     new SlashCommandBuilder()
         .setName('format')
@@ -629,7 +634,7 @@ client.on('messageCreate', async message => {
         });
     }
 
-    // 3. TROLL AI SOHBET SİSTEMİ
+    // 3. TROLL AI SOHBET SİSTEMİ (LİMİTLER KALDIRILDI)
     try {
         const aiChannelId = await firebaseRequest('get', '_AI_CHANNEL_');
         if (aiChannelId && message.channel.id === aiChannelId) {
@@ -642,9 +647,16 @@ client.on('messageCreate', async message => {
 
             await message.channel.sendTyping();
             
+            // Sınırları kaldıran safety ayarları eklendi
             const model = genAI.getGenerativeModel({ 
                 model: "gemini-1.5-flash",
-                systemInstruction: "Sen Discord'da takılan, çok laubali, sarkastik, biraz troll ve kafa dengi bir botsun. İnsanlara 'kanka', 'birader', 'olum' diye hitap et. Çok ciddi cevaplar verme, ironi yap. Arada cümle sonlarına 'asdasd', 'qweqwe' veya random harfler (jsjsjs) ekleyerek gül. Kısa ve net cevaplar ver. Biri sana laf atarsa altta kalma, lafı yapıştır."
+                systemInstruction: "Sen Discord'da takılan, çok laubali, sarkastik, biraz troll ve kafa dengi bir botsun. İnsanlara 'kanka', 'birader', 'olum' diye hitap et. Çok ciddi cevaplar verme, ironi yap. Arada cümle sonlarına 'asdasd', 'qweqwe' veya random harfler (jsjsjs) ekleyerek gül. Kısa ve net cevaplar ver. Biri sana laf atarsa altta kalma, lafı yapıştır.",
+                safetySettings: [
+                    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+                ]
             });
 
             const result = await model.generateContent(message.content);
@@ -655,6 +667,10 @@ client.on('messageCreate', async message => {
         }
     } catch (error) {
         console.error("AI Hatası:", error);
+        // Eğer Render'a şifreyi girmezsen bu hatayı atar ki anlayasın
+        if(error.message && error.message.includes("API key not valid")) {
+            return message.reply("Kanka API anahtarımı Render'a girmeyi unutmuşsun aq, beni bi tamir et jsjsjs");
+        }
         return message.reply("Oğlum o kadar saçmaladın ki beynim yandı aq asdasdasd tekrar düzgün bir şey yaz.");
     }
 });
@@ -682,6 +698,26 @@ async function handleCommand(interaction) {
     const { commandName, options, user, guild } = interaction;
     try {
         // ==================== YENİ EKLENEN SİSTEM KOMUTLARI ====================
+        if (commandName === 'ping') {
+            const sent = await interaction.reply({ content: '🏓 Hesaplanıyor...', fetchReply: true, ephemeral: true });
+            const latency = sent.createdTimestamp - interaction.createdTimestamp;
+            return interaction.editReply(`🏓 **Pong!**\n> 🤖 Bot Gecikmesi: \`${latency}ms\`\n> 🌐 API Gecikmesi: \`${Math.round(client.ws.ping)}ms\``);
+        }
+
+        if (commandName === 'guncelle') {
+            await interaction.reply({ content: '🔄 **Sistem optimize ediliyor, komutlar güncelleniyor ve bot yeniden başlatılıyor...**', ephemeral: true });
+            try {
+                const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+                await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
+                sendLog(guild, `🔄 **SİSTEM GÜNCELLENDİ**\n**Yetkili:** ${user.tag}\nBot yeniden başlatılıyor...`);
+                // Botu kapatıp Render'ın veya PM2'nin yeniden başlatmasını sağlar
+                setTimeout(() => { process.exit(1); }, 2000);
+                return;
+            } catch (error) {
+                return interaction.editReply('❌ Güncelleme sırasında bir hata oluştu.');
+            }
+        }
+
         if (commandName === 'ai-kur') {
             const kanal = options.getChannel('kanal');
             await firebaseRequest('put', '_AI_CHANNEL_', kanal.id);
@@ -824,7 +860,7 @@ async function handleCommand(interaction) {
                 .setDescription('Botun tüm komutları aşağıda listelenmiştir.')
                 .addFields(
                     { name: '👤 **Kullanıcı Komutları**', value: '> `/lisansim`, `/cevir`, `/sss`, `/referans`' },
-                    { name: '🛡️ **Yetkili Komutları**', value: '> `/format`, `/ticket-kur`, `/durum-guncelle`, `/loader-durum`\n> `/dm`, `/nuke`, `/lock`, `/unlock`, `/kick`, `/ban`\n> `/vip-ekle`, `/tum-lisanslar`, `/depremkur`, `/welcomer-kur`, `/welcomer-dashboard`, `/ai-kur`' }
+                    { name: '🛡️ **Yetkili Komutları**', value: '> `/format`, `/ticket-kur`, `/durum-guncelle`, `/loader-durum`\n> `/dm`, `/nuke`, `/lock`, `/unlock`, `/kick`, `/ban`\n> `/vip-ekle`, `/tum-lisanslar`, `/depremkur`, `/welcomer-kur`, `/welcomer-dashboard`, `/ai-kur`, `/ping`, `/guncelle`' }
                 )
                 .setFooter({ text: 'SAHO CHEATS Automation' });
             return interaction.reply({ embeds: [embed], ephemeral: true });

@@ -21,13 +21,12 @@ const { joinVoiceChannel, VoiceConnectionStatus, entersState } = require('@disco
 const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
-const path = require('path'); // DASHBOARD İÇİN EKLENDİ
+const path = require('path'); 
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // =============================================================================
 // AYARLAR VE KONFİGÜRASYON
 // =============================================================================
-// Eğer API key yoksa botun komple çökmemesi için ufak bir kontrol ekledik
 const apiKey = process.env.GEMINI_API_KEY || "BOS";
 const genAI = new GoogleGenerativeAI(apiKey);
 
@@ -41,11 +40,11 @@ const CONFIG = {
     MASTER_VIEW_ID: "1380526273431994449",
     SUPPORT_ROLE_ID: "1380526273431994449",
     // ------------------- KANALLAR VE ROLLER -------------------
-    LOG_CHANNEL_ID: "1469080536659001568", // GÜNCELLENDİ
+    LOG_CHANNEL_ID: "1469080536659001568", 
     CUSTOMER_ROLE_ID: "BURAYA_MUSTERI_ROL_ID_YAZ",
     DEPREM_CHANNEL_ID: "BURAYA_DEPREM_KANAL_ID_YAZ",
     WELCOME_CHANNEL_ID: "BURAYA_WELCOME_KANAL_ID_YAZ",
-    ARCHIVE_CHANNEL_ID: "1469080536659001568", // YENİ: Ticket Arşiv Kanalı
+    ARCHIVE_CHANNEL_ID: "1469080536659001568", 
  
     // ------------------- 7/24 SES AYARLARI -------------------
     VOICE_GUILD_ID: "1446824586808262709",
@@ -85,17 +84,16 @@ let lastEarthquakeTime = 0;
 // 1. WEB SERVER & DASHBOARD
 // =============================================================================
 const app = express();
-app.use(express.static(path.join(__dirname, 'public'))); // DASHBOARD İÇİN EKLENDİ
+app.use(express.static(path.join(__dirname, 'public'))); 
 
 app.get('/', (req, res) => {
     res.send({
         status: 'Online',
-        system: 'SAHO CHEATS SYSTEM vFinal + Music + Deprem + Welcomer + AI + Archive',
+        system: 'SAHO CHEATS SYSTEM vFinal + Music + Deprem + Welcomer + AI + Archive + Valorant',
         time: new Date().toISOString()
     });
 });
 
-// DASHBOARD VERİ ÇIKIŞI İÇİN EKLENDİ
 app.get('/api/stats', (req, res) => {
     let memberCount = 0;
     const guild = client.guilds.cache.get(CONFIG.VOICE_GUILD_ID);
@@ -139,6 +137,23 @@ const commands = [
     new SlashCommandBuilder().setName('ping').setDescription('🏓 Botun ve API\'nin anlık gecikme süresini (ms) gösterir.'),
     new SlashCommandBuilder().setName('guncelle').setDescription('🔄 (Admin) Botu yeniden başlatır, komutları günceller ve optimize eder.')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+    // ------------------- VALORANT KOMUTLARI (YENİ) -------------------
+    new SlashCommandBuilder()
+        .setName('val-rank')
+        .setDescription('🎮 Valorant rank ve güncel elo bilgilerini gösterir.')
+        .addStringOption(o => o.setName('nick').setDescription('Oyun içi isminiz (Örn: Saho)').setRequired(true))
+        .addStringOption(o => o.setName('etiket').setDescription('Etiketiniz (Örn: TR1)').setRequired(true)),
+        
+    new SlashCommandBuilder()
+        .setName('val-sonmac')
+        .setDescription('🔫 Valorant son oynadığınız maçın özetini gösterir.')
+        .addStringOption(o => o.setName('nick').setDescription('Oyun içi isminiz (Örn: Saho)').setRequired(true))
+        .addStringOption(o => o.setName('etiket').setDescription('Etiketiniz (Örn: TR1)').setRequired(true)),
+        
+    new SlashCommandBuilder()
+        .setName('val-vitrin')
+        .setDescription('🛒 Valorant güncel mağaza vitrinini (özel paketleri) gösterir.'),
 
     // ------------------- VİTRİN VE ÜRÜN YÖNETİMİ -------------------
     new SlashCommandBuilder()
@@ -536,18 +551,18 @@ client.once('ready', async () => {
     setInterval(async () => {
         const data = await firebaseRequest('get', '');
         if (!data) return;
-     
+      
         const today = new Date();
         for (const [key, value] of Object.entries(data)) {
             if (key.startsWith("_") || typeof value !== 'string') continue;
-         
+          
             let parts = value.split(',');
             if (parts[2] === 'bitik') continue;
-         
+          
             const startDate = new Date(parts[3]);
             const expiryDate = new Date(startDate);
             expiryDate.setDate(startDate.getDate() + parseInt(parts[1]));
-         
+          
             if (today > expiryDate) {
                 parts[2] = 'bitik';
                 await firebaseRequest('put', key, parts.join(','));
@@ -621,7 +636,7 @@ client.on('guildMemberAdd', async member => {
             settings.showMemberCount ? { name: 'Üye Sırası', value: `${member.guild.memberCount}. üye`, inline: true } : null
         )
         .setFooter({ text: 'SAHO CHEATS Community' });
-     
+      
     channel.send({ content: `${member.user}`, embeds: [embed] });
 });
 
@@ -777,6 +792,95 @@ client.on('interactionCreate', async interaction => {
 async function handleCommand(interaction) {
     const { commandName, options, user, guild } = interaction;
     try {
+
+        // ==================== VALORANT SİSTEMİ ====================
+        if (commandName === 'val-rank') {
+            await interaction.deferReply();
+            const nick = options.getString('nick');
+            const etiket = options.getString('etiket').replace('#', '');
+            
+            try {
+                const res = await axios.get(`https://api.henrikdev.xyz/valorant/v1/mmr/eu/${encodeURIComponent(nick)}/${encodeURIComponent(etiket)}`, { timeout: 10000 });
+                if (!res.data || !res.data.data) throw new Error("Veri yok");
+                
+                const data = res.data.data;
+                const embed = new EmbedBuilder()
+                    .setTitle(`🎮 ${data.name}#${data.tag} | Güncel Rank`)
+                    .setColor(CONFIG.SUCCESS_COLOR)
+                    .addFields(
+                        { name: '🏆 Mevcut Rank', value: `${data.currenttierpatched || 'Derecesiz'}`, inline: true },
+                        { name: '📊 Kademede Puan (RR)', value: `${data.ranking_in_tier || 0} RR`, inline: true },
+                        { name: '📈 Elo Değişimi', value: `${data.mmr_change_to_last_game > 0 ? '+' : ''}${data.mmr_change_to_last_game || 0}`, inline: true }
+                    )
+                    .setThumbnail(data.images?.small || 'https://freelogopng.com/images/all_img/1664302216valorant-logo-png.png')
+                    .setFooter({ text: 'SAHO CHEATS | Valorant Stats' });
+                    
+                return interaction.editReply({ embeds: [embed] });
+            } catch (error) {
+                return interaction.editReply("❌ **Kanka hesabı bulamadım veya api yoğun.** Gizli profilleri göremem.");
+            }
+        }
+
+        if (commandName === 'val-sonmac') {
+            await interaction.deferReply();
+            const nick = options.getString('nick');
+            const etiket = options.getString('etiket').replace('#', '');
+            
+            try {
+                const res = await axios.get(`https://api.henrikdev.xyz/valorant/v3/matches/eu/${encodeURIComponent(nick)}/${encodeURIComponent(etiket)}`, { timeout: 10000 });
+                if (!res.data || !res.data.data || res.data.data.length === 0) throw new Error("Maç yok");
+                
+                const lastMatch = res.data.data[0];
+                const player = lastMatch.players.all.find(p => p.name.toLowerCase() === nick.toLowerCase() && p.tag.toLowerCase() === etiket.toLowerCase());
+                
+                if (!player) throw new Error("Oyuncu eşleşmedi");
+
+                const kda = `${player.stats.kills} / ${player.stats.deaths} / ${player.stats.assists}`;
+                const teamWon = lastMatch.teams[player.team.toLowerCase()]?.has_won;
+
+                const embed = new EmbedBuilder()
+                    .setTitle(`🔫 ${player.name}#${player.tag} | Son Maç Özeti`)
+                    .setColor(teamWon ? CONFIG.SUCCESS_COLOR : CONFIG.ERROR_COLOR)
+                    .addFields(
+                        { name: '🗺️ Harita', value: lastMatch.metadata.map, inline: true },
+                        { name: '🕵️ Ajan', value: player.character, inline: true },
+                        { name: '🎯 KDA', value: kda, inline: true },
+                        { name: '💥 Skor', value: `Toplam HS: ${player.stats.headshots}`, inline: true },
+                        { name: 'Sonuç', value: teamWon ? '✅ Galibiyet' : '❌ Mağlubiyet', inline: true }
+                    )
+                    .setThumbnail(player.assets.agent.small)
+                    .setFooter({ text: 'SAHO CHEATS | Valorant Tracker' })
+                    .setTimestamp(new Date(lastMatch.metadata.game_start * 1000));
+                    
+                return interaction.editReply({ embeds: [embed] });
+            } catch (error) {
+                return interaction.editReply("❌ **Kanka oyuncunun son maçını çekemedim.**");
+            }
+        }
+
+        if (commandName === 'val-vitrin') {
+            await interaction.deferReply();
+            try {
+                const res = await axios.get(`https://api.henrikdev.xyz/valorant/v2/store-featured`, { timeout: 10000 });
+                if (!res.data || !res.data.data) throw new Error("Mağaza verisi yok");
+                
+                const bundles = res.data.data;
+                const embed = new EmbedBuilder()
+                    .setTitle('🛒 VALORANT GÜNCEL MAĞAZA VİTRİNİ')
+                    .setDescription('Şu anki öne çıkan paketler ve skinler aşağıdadır:')
+                    .setColor(CONFIG.GOLD_COLOR);
+                    
+                bundles.forEach((bundle, index) => {
+                    embed.addFields({ name: `🎁 Paket ${index + 1}`, value: `**İsim:** ${bundle.bundle_price ? bundle.bundle_price + ' VP' : 'Vitrin Paketi'}`, inline: false });
+                    if (index === 0 && bundle.bundle_uuid) embed.setImage(`https://media.valorant-api.com/bundles/${bundle.bundle_uuid}/displayicon.png`);
+                });
+                
+                return interaction.editReply({ embeds: [embed] });
+            } catch (error) {
+                return interaction.editReply("❌ **Kanka mağaza verilerini çekerken hata oldu.**");
+            }
+        }
+
         // ==================== YENİ EKLENEN SİSTEM KOMUTLARI ====================
         if (commandName === 'ping') {
             const sent = await interaction.reply({ content: '🏓 Hesaplanıyor...', fetchReply: true, ephemeral: true });
@@ -939,7 +1043,7 @@ async function handleCommand(interaction) {
                 .setColor(CONFIG.EMBED_COLOR)
                 .setDescription('Botun tüm komutları aşağıda listelenmiştir.')
                 .addFields(
-                    { name: '👤 **Kullanıcı Komutları**', value: '> `/lisansim`, `/cevir`, `/sss`, `/referans`' },
+                    { name: '👤 **Kullanıcı Komutları**', value: '> `/lisansim`, `/cevir`, `/sss`, `/referans`, `/val-rank`, `/val-sonmac`, `/val-vitrin`' },
                     { name: '🛡️ **Yetkili Komutları**', value: '> `/format`, `/ticket-kur`, `/durum-guncelle`, `/loader-durum`\n> `/dm`, `/nuke`, `/lock`, `/unlock`, `/kick`, `/ban`\n> `/vip-ekle`, `/tum-lisanslar`, `/depremkur`, `/welcomer-kur`, `/welcomer-dashboard`, `/ai-kur`, `/ping`, `/guncelle`' }
                 )
                 .setFooter({ text: 'SAHO CHEATS Automation' });

@@ -24,6 +24,7 @@ const cheerio = require('cheerio');
 const path = require('path'); 
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { DisTube } = require('distube'); // 🎵 MÜZİK EKLENTİSİ GELDİ KANKA
+const { YouTubePlugin } = require('@distube/youtube'); // 🔍 YOUTUBE GÖZLÜĞÜ EKLENDİ KANKA
 
 // =============================================================================
 // AYARLAR VE KONFİGÜRASYON
@@ -138,7 +139,7 @@ const client = new Client({
 
 // 🎵 DISTUBE MÜZİK AYARLARI (GÜNCELLENDİ)
 const distube = new DisTube(client, {
-    // Sürüm uyuşmazlığı yapmasın diye eski ayarları sildik, Distube kendi otomatik ayarlayacak.
+    plugins: [new YouTubePlugin()] // YOUTUBE ARAMASI BURADA DEVREYE GİRİYOR!
 });
 
 distube.on('playSong', (queue, song) => {

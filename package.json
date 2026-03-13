@@ -13,6 +13,7 @@
   "type": "commonjs",
   "dependencies": {
     "@discordjs/voice": "^0.17.0",
+    "@distube/youtube": "^1.0.4",
     "@google/generative-ai": "^0.24.1",
     "axios": "^1.7.9",
     "cheerio": "^1.2.0",

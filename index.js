@@ -23,6 +23,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const path = require('path'); 
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { DisTube } = require('distube'); // 🎵 MÜZİK EKLENTİSİ GELDİ KANKA
 
 // =============================================================================
 // AYARLAR VE KONFİGÜRASYON
@@ -90,7 +91,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => {
     res.send({
         status: 'Online',
-        system: 'SAHO CHEATS SYSTEM vFinal + AntiCrash',
+        system: 'SAHO CHEATS SYSTEM vFinal + AntiCrash + Müzik',
         time: new Date().toISOString()
     });
 });
@@ -121,7 +122,7 @@ app.listen(port, () => {
 });
 
 // =============================================================================
-// 2. BOT İSTEMCİSİ
+// 2. BOT İSTEMCİSİ VE MÜZİK MOTORU
 // =============================================================================
 const client = new Client({
     intents: [
@@ -135,6 +136,27 @@ const client = new Client({
     partials: [Partials.Channel, Partials.Message, Partials.User]
 });
 
+// 🎵 DISTUBE MÜZİK AYARLARI 
+const distube = new DisTube(client, {
+    leaveOnEmpty: true,
+    leaveOnFinish: true,
+    leaveOnStop: true,
+    emitNewSongOnly: true
+});
+
+distube.on('playSong', (queue, song) => {
+    queue.textChannel.send(`🎶 **Şu an patlıyoruz:** \`${song.name}\` - \`${song.formattedDuration}\`\n🎤 **İsteyen:** ${song.user}`);
+});
+
+distube.on('addSong', (queue, song) => {
+    queue.textChannel.send(`✅ **Sıraya eklendi:** \`${song.name}\` - \`${song.formattedDuration}\``);
+});
+
+distube.on('error', (channel, e) => {
+    if (channel) channel.send(`❌ **Kanka çalarken bi hata oldu aq:** ${e.toString().slice(0, 100)}...`);
+    console.error("Müzik Hatası:", e);
+});
+
 // =============================================================================
 // 3. KOMUT LİSTESİ
 // =============================================================================
@@ -142,6 +164,18 @@ const commands = [
     new SlashCommandBuilder().setName('ping').setDescription('🏓 Botun ve API\'nin anlık gecikme süresini (ms) gösterir.'),
     new SlashCommandBuilder().setName('guncelle').setDescription('🔄 (Admin) Botu yeniden başlatır, komutları günceller ve optimize eder.').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     new SlashCommandBuilder().setName('zorla-calistir').setDescription('🚀 (Admin) Discord bağlantısını zorla yeniler (Çökmelerde kullanılır).').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+    // 🎵 MÜZİK KOMUTLARI EKLENDİ
+    new SlashCommandBuilder()
+        .setName('oynat')
+        .setDescription('🎵 İstediğin şarkıyı çalar (Şimşek bot style)')
+        .addStringOption(o => o.setName('sarki').setDescription('Şarkı adı veya YouTube linki').setRequired(true)),
+    new SlashCommandBuilder()
+        .setName('durdur')
+        .setDescription('🛑 Çalan şarkıyı durdurur ve bot sesten çıkar.'),
+    new SlashCommandBuilder()
+        .setName('gec')
+        .setDescription('⏭️ Sıradaki şarkıya geçer.'),
 
     new SlashCommandBuilder()
         .setName('val-rank')
@@ -380,7 +414,7 @@ async function firebaseRequest(method, path, data = null) {
             url,
             data: payload,
             headers: { 'Content-Type': 'application/json' },
-            timeout: 10000 // Firebase API kilitlenmesini engeller
+            timeout: 10000 
         });
         return response.data;
     } catch (error) {
@@ -542,6 +576,7 @@ client.once('ready', async () => {
     console.log(`✅ BOT GİRİŞ YAPTI: ${client.user.tag}`);
     console.log(`🆔 BOT ID: ${client.user.id}`);
     console.log(`🛡️ ZIRH SİSTEMİ: AKTİF (Bot Çökmesi Engellendi)`);
+    console.log(`🎵 MÜZİK SİSTEMİ: AKTİF`);
     console.log(`=============================================\n`);
  
     connectToVoice();
@@ -553,6 +588,7 @@ client.once('ready', async () => {
         const activities = [
             `SAHO CHEATS`,
             `🔊 ${totalVoice} Kişi Seste`,
+            `🎶 Müzik Dinliyor`,
             `🛡️ Loader: ${loaderStatus}`,
             `7/24 Destek Hattı`,
             `🚨 Deprem İzliyor`,
@@ -753,7 +789,7 @@ client.on('messageCreate', async message => {
             }
 
             const model = genAI.getGenerativeModel({ 
-                model: "gemini-1.5-pro", // 🔥 İŞTE BURASI GÜNCELLENDİ 🔥
+                model: "gemini-1.5-pro",
                 systemInstruction: "Sen Discord'da takılan, çok laubali, sarkastik, biraz troll ve kafa dengi bir botsun. İnsanlara 'kanka', 'birader', 'olum' diye hitap et. Çok ciddi cevaplar verme, ironi yap. Arada cümle sonlarına 'asdasd', 'qweqwe' veya random harfler (jsjsjs) ekleyerek gül. Kısa ve net cevaplar ver. Biri sana laf atarsa altta kalma, lafı yapıştır.",
                 safetySettings: [
                     { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
@@ -798,6 +834,55 @@ client.on('interactionCreate', async interaction => {
 async function handleCommand(interaction) {
     const { commandName, options, user, guild } = interaction;
     try {
+        
+        // ========================================
+        // 🎵 MÜZİK KOMUTLARI
+        // ========================================
+        if (commandName === 'oynat') {
+            const sarki = options.getString('sarki');
+            const voiceChannel = interaction.member?.voice?.channel;
+            
+            if (!voiceChannel) {
+                return interaction.reply({ content: '❌ Kanka şarkı açmam için önce bir ses kanalına girmen lazım!', ephemeral: true });
+            }
+
+            await interaction.reply(`🔍 **\`${sarki}\`** aranıyor kanka, bekle...`);
+            
+            try {
+                await distube.play(voiceChannel, sarki, {
+                    member: interaction.member,
+                    textChannel: interaction.channel
+                });
+                return interaction.editReply(`💿 İşlem tamam koçum, listeye alındı!`);
+            } catch (e) {
+                return interaction.editReply(`❌ Şarkıyı bulamadım veya çalamadım amk: ${e.message}`);
+            }
+        }
+
+        if (commandName === 'durdur') {
+            const voiceChannel = interaction.member?.voice?.channel;
+            if (!voiceChannel) return interaction.reply({ content: '❌ Seste değilsin kanka!', ephemeral: true });
+            
+            try {
+                distube.stop(interaction.guild);
+                return interaction.reply('🛑 **Mekanı terk ediyorum. Şarkı durduruldu, hadi eyvallah!** qweqwe');
+            } catch (e) {
+                return interaction.reply('❌ Kanka şu an çalan bir bok yok zaten nesini durdurayım asdasd');
+            }
+        }
+
+        if (commandName === 'gec') {
+            const voiceChannel = interaction.member?.voice?.channel;
+            if (!voiceChannel) return interaction.reply({ content: '❌ Seste değilsin!', ephemeral: true });
+            
+            try {
+                distube.skip(interaction.guild);
+                return interaction.reply('⏭️ **Sıradaki parçaya geçildi koçum!**');
+            } catch (e) {
+                return interaction.reply('❌ Kanka sırada başka şarkı yok ki neye geçeyim qweqwe');
+            }
+        }
+        // ========================================
 
         if (commandName === 'zorla-calistir') {
             await interaction.reply({ content: '⚙️ **Bot bağlantıları zorla yenileniyor...** Bu işlem botun takıldığını düşündüğünüzde kullanılmalıdır.', ephemeral: true });
@@ -1038,7 +1123,7 @@ async function handleCommand(interaction) {
                 .setColor(CONFIG.EMBED_COLOR)
                 .setDescription('Botun tüm komutları aşağıda listelenmiştir.')
                 .addFields(
-                    { name: '👤 **Kullanıcı Komutları**', value: '> `/lisansim`, `/cevir`, `/sss`, `/referans`, `/val-rank`, `/val-sonmac`, `/val-vitrin`' },
+                    { name: '👤 **Kullanıcı Komutları**', value: '> `/oynat`, `/durdur`, `/gec`, `/lisansim`, `/cevir`, `/sss`, `/referans`, `/val-rank`, `/val-sonmac`, `/val-vitrin`' },
                     { name: '🛡️ **Yetkili Komutları**', value: '> `/format`, `/ticket-kur`, `/durum-guncelle`, `/loader-durum`\n> `/dm`, `/nuke`, `/lock`, `/unlock`, `/kick`, `/ban`\n> `/vip-ekle`, `/tum-lisanslar`, `/depremkur`, `/welcomer-kur`, `/welcomer-dashboard`, `/ai-kur`, `/ping`, `/guncelle`, `/zorla-calistir`' }
                 )
                 .setFooter({ text: 'SAHO CHEATS Automation' });

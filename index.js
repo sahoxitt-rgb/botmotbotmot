@@ -136,12 +136,9 @@ const client = new Client({
     partials: [Partials.Channel, Partials.Message, Partials.User]
 });
 
-// 🎵 DISTUBE MÜZİK AYARLARI 
+// 🎵 DISTUBE MÜZİK AYARLARI (GÜNCELLENDİ)
 const distube = new DisTube(client, {
-    leaveOnEmpty: true,
-    leaveOnFinish: true,
-    leaveOnStop: true,
-    emitNewSongOnly: true
+    // Sürüm uyuşmazlığı yapmasın diye eski ayarları sildik, Distube kendi otomatik ayarlayacak.
 });
 
 distube.on('playSong', (queue, song) => {
@@ -165,7 +162,7 @@ const commands = [
     new SlashCommandBuilder().setName('guncelle').setDescription('🔄 (Admin) Botu yeniden başlatır, komutları günceller ve optimize eder.').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     new SlashCommandBuilder().setName('zorla-calistir').setDescription('🚀 (Admin) Discord bağlantısını zorla yeniler (Çökmelerde kullanılır).').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
-    // 🎵 MÜZİK KOMUTLARI EKLENDİ
+    // 🎵 MÜZİK KOMUTLARI
     new SlashCommandBuilder()
         .setName('oynat')
         .setDescription('🎵 İstediğin şarkıyı çalar (Şimşek bot style)')

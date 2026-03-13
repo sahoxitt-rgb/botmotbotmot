@@ -79,9 +79,10 @@ const CONFIG = {
 let isMaintenanceEnabled = false;
 let loaderStatus = "UNDETECTED 🟢";
 let lastEarthquakeTime = 0; 
+let failedVoiceAttempts = 0;
 
 // =============================================================================
-// 1. WEB SERVER & DASHBOARD
+// 1. WEB SERVER & KEEPALIVE (ANTI-UYKU) SİSTEMİ
 // =============================================================================
 const app = express();
 app.use(express.static(path.join(__dirname, 'public'))); 
@@ -89,7 +90,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => {
     res.send({
         status: 'Online',
-        system: 'SAHO CHEATS SYSTEM vFinal + Music + Deprem + Welcomer + AI + Archive + Valorant',
+        system: 'SAHO CHEATS SYSTEM vFinal + AntiCrash',
         time: new Date().toISOString()
     });
 });
@@ -112,6 +113,11 @@ app.get('/api/stats', (req, res) => {
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
     console.log(`🌍 [SERVER] Web sunucusu ${port} portunda başlatıldı.`);
+    
+    // ANTI-UYKU SİSTEMİ: Render/Replit gibi yerlerde uyumasını engeller
+    setInterval(() => {
+        axios.get(`http://localhost:${port}/`).catch(() => {});
+    }, 5 * 60 * 1000); 
 });
 
 // =============================================================================
@@ -133,12 +139,10 @@ const client = new Client({
 // 3. KOMUT LİSTESİ
 // =============================================================================
 const commands = [
-    // --- YENİ EKLENEN SİSTEM KOMUTLARI ---
     new SlashCommandBuilder().setName('ping').setDescription('🏓 Botun ve API\'nin anlık gecikme süresini (ms) gösterir.'),
-    new SlashCommandBuilder().setName('guncelle').setDescription('🔄 (Admin) Botu yeniden başlatır, komutları günceller ve optimize eder.')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    new SlashCommandBuilder().setName('guncelle').setDescription('🔄 (Admin) Botu yeniden başlatır, komutları günceller ve optimize eder.').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    new SlashCommandBuilder().setName('zorla-calistir').setDescription('🚀 (Admin) Discord bağlantısını zorla yeniler (Çökmelerde kullanılır).').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
-    // ------------------- VALORANT KOMUTLARI (YENİ) -------------------
     new SlashCommandBuilder()
         .setName('val-rank')
         .setDescription('🎮 Valorant rank ve güncel elo bilgilerini gösterir.')
@@ -155,7 +159,6 @@ const commands = [
         .setName('val-vitrin')
         .setDescription('🛒 Valorant güncel mağaza vitrinini (özel paketleri) gösterir.'),
 
-    // ------------------- VİTRİN VE ÜRÜN YÖNETİMİ -------------------
     new SlashCommandBuilder()
         .setName('format')
         .setDescription('📸 (Admin) Profesyonel ürün vitrini oluşturur.')
@@ -166,100 +169,109 @@ const commands = [
         .addAttachmentOption(o => o.setName('gorsel3').setDescription('Ek Resim 2').setRequired(false))
         .addAttachmentOption(o => o.setName('gorsel4').setDescription('Ek Resim 3').setRequired(false))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-    // ------------------- TICKET VE DESTEK -------------------
+    
     new SlashCommandBuilder()
         .setName('ticket-kur')
         .setDescription('🎫 (Admin) Profesyonel Ticket Panelini Kurar.')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-    new SlashCommandBuilder()
-        .setName('sss')
-        .setDescription('❓ Sıkça Sorulan Sorular'),
-    new SlashCommandBuilder()
-        .setName('help')
-        .setDescription('📚 Bot kullanım rehberi ve tüm komutlar.'),
-    // ------------------- YAPAY ZEKA -------------------
+    
+    new SlashCommandBuilder().setName('sss').setDescription('❓ Sıkça Sorulan Sorular'),
+    new SlashCommandBuilder().setName('help').setDescription('📚 Bot kullanım rehberi ve tüm komutlar.'),
+    
     new SlashCommandBuilder()
         .setName('ai-kur')
         .setDescription('🤖 (Admin) Troll Yapay Zeka kanalını belirler.')
         .addChannelOption(o => o.setName('kanal').setDescription('AI Kanalı').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-    // ------------------- DEPREM SİSTEMİ -------------------
+    
     new SlashCommandBuilder()
         .setName('depremkur')
         .setDescription('🚨 (Admin) Deprem bildirim kanalını kurar.')
         .addChannelOption(o => o.setName('kanal').setDescription('Bildirim Kanalı').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-    // ------------------- WELCOMER SİSTEMİ -------------------
+    
     new SlashCommandBuilder()
         .setName('welcomer-kur')
         .setDescription('👋 (Admin) Hoş geldin sistemini kurar.')
         .addChannelOption(o => o.setName('kanal').setDescription('Hoş Geldin Kanalı').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    
     new SlashCommandBuilder()
         .setName('welcomer-dashboard')
         .setDescription('⚙️ (Admin) Hoş geldin ayarlarını yönetir.')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-    // ------------------- GÜVENLİK VE MODERASYON -------------------
+    
     new SlashCommandBuilder()
         .setName('nuke')
         .setDescription('☢️ (Admin) Kanalı siler ve aynı özelliklerle yeniden oluşturur.')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    
     new SlashCommandBuilder()
         .setName('lock')
         .setDescription('🔒 (Admin) Kanalı kilitler.')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+    
     new SlashCommandBuilder()
         .setName('unlock')
         .setDescription('🔓 (Admin) Kanal kilidini açar.')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+    
     new SlashCommandBuilder()
         .setName('dm')
         .setDescription('📨 (Admin) Bot üzerinden kullanıcıya özel mesaj atar.')
         .addUserOption(o => o.setName('kullanici').setDescription('Kime?').setRequired(true))
         .addStringOption(o => o.setName('mesaj').setDescription('Ne yazılacak?').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    
     new SlashCommandBuilder()
         .setName('kick')
         .setDescription('👢 (Admin) Kullanıcıyı sunucudan atar.')
         .addUserOption(o => o.setName('kullanici').setDescription('Kişi').setRequired(true))
         .addStringOption(o => o.setName('sebep').setDescription('Sebep').setRequired(false))
         .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
+    
     new SlashCommandBuilder()
         .setName('ban')
         .setDescription('🔨 (Admin) Kullanıcıyı yasaklar.')
         .addUserOption(o => o.setName('kullanici').setDescription('Kişi').setRequired(true))
         .addStringOption(o => o.setName('sebep').setDescription('Sebep').setRequired(false))
         .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
+    
     new SlashCommandBuilder()
         .setName('unban')
         .setDescription('🔓 (Admin) Kullanıcının yasağını kaldırır.')
         .addStringOption(o => o.setName('id').setDescription('Kullanıcı ID').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
+    
     new SlashCommandBuilder()
         .setName('temizle')
         .setDescription('🧹 (Admin) Sohbeti temizler.')
         .addIntegerOption(o => o.setName('sayi').setDescription('Silinecek miktar (1-100)').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+    
     new SlashCommandBuilder()
         .setName('bakim-modu')
         .setDescription('🔒 (Admin) Bakım modunu yönetir.')
         .addBooleanOption(o => o.setName('durum').setDescription('Açık mı?').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    
     new SlashCommandBuilder()
         .setName('karaliste-ekle')
         .setDescription('⛔ (Admin) Kullanıcıyı bot karalistesine alır.')
         .addUserOption(o => o.setName('kullanici').setDescription('Kişi').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    
     new SlashCommandBuilder()
         .setName('karaliste-cikar')
         .setDescription('✅ (Admin) Kullanıcıyı karalisteden çıkarır.')
         .addUserOption(o => o.setName('kullanici').setDescription('Kişi').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-    // ------------------- YÖNETİM VE DURUM -------------------
+    
     new SlashCommandBuilder()
         .setName('tum-lisanslar')
         .setDescription('📜 (Admin) Aktif tüm lisansları listeler.')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    
     new SlashCommandBuilder()
         .setName('loader-durum')
         .setDescription('🛡️ (Admin) Loader güvenlik durumunu değiştirir.')
@@ -271,6 +283,7 @@ const commands = [
                 {name:'🛠️ UPDATING', value:'UPDATING 🛠️'}
             ))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    
     new SlashCommandBuilder()
         .setName('durum-guncelle')
         .setDescription('📊 (Admin) Ürünlerin durum tablosunu yayınlar.')
@@ -289,37 +302,34 @@ const commands = [
                 {name:'🟡 UPDATING', value:'updating'}
             ))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    
     new SlashCommandBuilder()
         .setName('duyuru')
         .setDescription('📢 (Admin) Özel embed ile duyuru yapar.')
         .addStringOption(o => o.setName('mesaj').setDescription('Mesaj').setRequired(true))
         .addChannelOption(o => o.setName('kanal').setDescription('Kanal').setRequired(false))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-    new SlashCommandBuilder()
-        .setName('sunucu-bilgi')
-        .setDescription('📊 Sunucu istatistiklerini gösterir.'),
-    // ------------------- ÇARKIFELEK -------------------
-    new SlashCommandBuilder()
-        .setName('cevir')
-        .setDescription('🎡 Şans Çarkı! (Ödül kazanma şansı).'),
-    new SlashCommandBuilder()
-        .setName('cark-oranlar')
-        .setDescription('📊 Çarkıfelekteki ödüllerin oranlarını gösterir.'),
+    
+    new SlashCommandBuilder().setName('sunucu-bilgi').setDescription('📊 Sunucu istatistiklerini gösterir.'),
+    
+    new SlashCommandBuilder().setName('cevir').setDescription('🎡 Şans Çarkı! (Ödül kazanma şansı).'),
+    new SlashCommandBuilder().setName('cark-oranlar').setDescription('📊 Çarkıfelekteki ödüllerin oranlarını gösterir.'),
+    
     new SlashCommandBuilder()
         .setName('cark-hak-ekle')
         .setDescription('🎡 (Admin) Kullanıcıya çark hakkı verir.')
         .addUserOption(o => o.setName('kullanici').setDescription('Kişi').setRequired(true))
         .addIntegerOption(o => o.setName('adet').setDescription('Adet').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    
     new SlashCommandBuilder()
         .setName('referans')
         .setDescription('⭐ Hizmeti puanla ve yorum bırak.')
         .addIntegerOption(o => o.setName('puan').setDescription('Puan (1-5)').setRequired(true).setMinValue(1).setMaxValue(5))
         .addStringOption(o => o.setName('yorum').setDescription('Yorum').setRequired(true)),
-    // ------------------- LİSANS İŞLEMLERİ -------------------
-    new SlashCommandBuilder()
-        .setName('lisansim')
-        .setDescription('👤 Lisans durumunu ve panelini gör.'),
+    
+    new SlashCommandBuilder().setName('lisansim').setDescription('👤 Lisans durumunu ve panelini gör.'),
+    
     new SlashCommandBuilder()
         .setName('vip-ekle')
         .setDescription('💎 (Admin) VIP lisans tanımlar.')
@@ -327,6 +337,7 @@ const commands = [
         .addStringOption(o => o.setName('key_ismi').setDescription('Key Adı').setRequired(true))
         .addIntegerOption(o => o.setName('gun').setDescription('Süre (Gün)').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    
     new SlashCommandBuilder()
         .setName('kullanici-ekle')
         .setDescription('🛠️ (Admin) Normal lisans tanımlar.')
@@ -334,21 +345,22 @@ const commands = [
         .addStringOption(o => o.setName('key_ismi').setDescription('Key Adı').setRequired(true))
         .addIntegerOption(o => o.setName('gun').setDescription('Süre (Gün)').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    
     new SlashCommandBuilder()
         .setName('olustur')
         .setDescription('🛠️ (Admin) Boş (sahipsiz) key oluşturur.')
         .addIntegerOption(o => o.setName('gun').setDescription('Süre').setRequired(true))
         .addStringOption(o => o.setName('isim').setDescription('İsim (Opsiyonel)').setRequired(false))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-    new SlashCommandBuilder()
-        .setName('sil')
-        .setDescription('🗑️ (Admin) Key siler.')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    
+    new SlashCommandBuilder().setName('sil').setDescription('🗑️ (Admin) Key siler.').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    
     new SlashCommandBuilder()
         .setName('hwid-hak-ekle')
         .setDescription('➕ (Admin) HWID hakkı ekler.')
         .addIntegerOption(o => o.setName('adet').setDescription('Adet').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    
     new SlashCommandBuilder()
         .setName('durdurma-hak-ekle')
         .setDescription('➕ (Admin) Durdurma hakkı ekler.')
@@ -367,7 +379,8 @@ async function firebaseRequest(method, path, data = null) {
             method,
             url,
             data: payload,
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 10000 // Firebase API kilitlenmesini engeller
         });
         return response.data;
     } catch (error) {
@@ -404,17 +417,18 @@ async function getNextTicketNumber() {
     return count;
 }
 
-// LOG GÖNDERME FONKSİYONU GÜNCELLENDİ (Embedleri desteklemesi için)
 async function sendLog(guild, content) {
     if (!guild || !CONFIG.LOG_CHANNEL_ID || CONFIG.LOG_CHANNEL_ID === "BURAYA_LOG_KANAL_ID_YAZ") return;
-    const channel = guild.channels.cache.get(CONFIG.LOG_CHANNEL_ID);
-    if (channel) {
-        if (typeof content === 'string') {
-            channel.send({ content: content }).catch(() => {});
-        } else {
-            channel.send(content).catch(() => {});
+    try {
+        const channel = await guild.channels.fetch(CONFIG.LOG_CHANNEL_ID).catch(() => null);
+        if (channel) {
+            if (typeof content === 'string') {
+                channel.send({ content: content }).catch(() => {});
+            } else {
+                channel.send(content).catch(() => {});
+            }
         }
-    }
+    } catch(err) { /* ignore */ }
 }
 
 function createPanelPayload(key, parts) {
@@ -463,7 +477,7 @@ function createPanelPayload(key, parts) {
 
 async function checkEarthquakes() {
     try {
-        const response = await axios.get(CONFIG.DEPREM_API_URL);
+        const response = await axios.get(CONFIG.DEPREM_API_URL, { timeout: 10000 });
         const html = response.data;
         const $ = cheerio.load(html);
         const earthquakes = [];
@@ -502,9 +516,7 @@ async function checkEarthquakes() {
                 }
             }
         }
-    } catch (error) {
-        console.error('Deprem kontrol hatası:', error);
-    }
+    } catch (error) { /* Sessizce geç */ }
 }
 
 async function getWelcomeSettings(guildId) {
@@ -516,21 +528,24 @@ async function setWelcomeSettings(guildId, newSettings) {
 }
 
 // =============================================================================
-// 5. BOT EVENTS
+// 5. BOT EVENTS & ZIRH SİSTEMİ
 // =============================================================================
+
+// DISCORD BAĞLANTI ZIRHLARI
+client.on('error', (err) => console.error("🚨 Discord Bağlantı Hatası:", err.message));
+client.on('shardError', error => console.error('🚨 WebSocket Bağlantı Hatası:', error.message));
+client.on('shardDisconnect', () => console.log('⚠️ Botun bağlantısı koptu, yeniden bağlanmaya çalışıyor...'));
+client.on('shardResume', () => console.log('✅ Bot bağlantıyı başarıyla yeniledi!'));
+
 client.once('ready', async () => {
     console.log(`\n=============================================`);
     console.log(`✅ BOT GİRİŞ YAPTI: ${client.user.tag}`);
     console.log(`🆔 BOT ID: ${client.user.id}`);
-    console.log(`🚨 DEPREM SİSTEMİ AKTİF`);
-    console.log(`👋 WELCOMER SİSTEMİ AKTİF`);
-    console.log(`🤖 YAPAY ZEKA SİSTEMİ AKTİF`);
+    console.log(`🛡️ ZIRH SİSTEMİ: AKTİF (Bot Çökmesi Engellendi)`);
     console.log(`=============================================\n`);
  
-    // 7/24 ses bağlantısı
     connectToVoice();
 
-    // Dinamik durum döngüsü
     let index = 0;
     setInterval(() => {
         let totalVoice = 0;
@@ -543,7 +558,7 @@ client.once('ready', async () => {
             `🚨 Deprem İzliyor`,
             `🤖 Troll AI Aktif`
         ];
-        client.user.setActivity({ name: activities[index], type: ActivityType.Playing });
+        if (client.user) client.user.setActivity({ name: activities[index], type: ActivityType.Playing });
         index = (index + 1) % activities.length;
     }, 5000);
 
@@ -571,11 +586,9 @@ client.once('ready', async () => {
         }
     }, 3600000);
 
-    // Deprem kontrol interval
     setInterval(checkEarthquakes, CONFIG.DEPREM_CHECK_INTERVAL);
     checkEarthquakes(); 
 
-    // Komut yükleme
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     try {
         console.log('🔄 Komutlar API\'ye yükleniyor...');
@@ -584,12 +597,12 @@ client.once('ready', async () => {
     } catch (e) { console.error('Komut hatası:', e); }
 });
 
-// 7/24 ses bağlantısı
+// 7/24 SES BAĞLANTISI (ZIRHLI)
 async function connectToVoice() {
     const guild = client.guilds.cache.get(CONFIG.VOICE_GUILD_ID);
-    if (!guild) return console.log("❌ [SES] Hedef sunucu bulunamadı!");
+    if (!guild) return;
     const channel = guild.channels.cache.get(CONFIG.VOICE_CHANNEL_ID);
-    if (!channel) return console.log("❌ [SES] Hedef ses kanalı bulunamadı!");
+    if (!channel) return;
     try {
         const connection = joinVoiceChannel({
             channelId: channel.id,
@@ -598,9 +611,8 @@ async function connectToVoice() {
             selfDeaf: true,
             selfMute: true
         });
-        console.log(`🔊 [SES] ${channel.name} kanalına bağlanıldı!`);
+        
         connection.on(VoiceConnectionStatus.Disconnected, async () => {
-            console.log("⚠️ [SES] Bağlantı koptu! Tekrar bağlanılıyor...");
             try {
                 await Promise.race([
                     entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
@@ -608,16 +620,19 @@ async function connectToVoice() {
                 ]);
             } catch (error) {
                 connection.destroy();
-                connectToVoice();
+                failedVoiceAttempts++;
+                if (failedVoiceAttempts < 10) setTimeout(connectToVoice, 5000);
             }
         });
+        
+        connection.on(VoiceConnectionStatus.Ready, () => {
+            failedVoiceAttempts = 0;
+        });
     } catch (error) {
-        console.error("❌ [SES HATASI]:", error);
         setTimeout(connectToVoice, 5000);
     }
 }
 
-// Hoş geldin mesajı
 client.on('guildMemberAdd', async member => {
     const channelId = CONFIG.WELCOME_CHANNEL_ID;
     if (!channelId || channelId === "BURAYA_WELCOME_KANAL_ID_YAZ") return;
@@ -640,7 +655,7 @@ client.on('guildMemberAdd', async member => {
     channel.send({ content: `${member.user}`, embeds: [embed] });
 });
 
-// ---------------- HAFİYE LOG SİSTEMİ EKLENDİ ----------------
+// HAFİYE LOG SİSTEMİ
 client.on('messageDelete', async message => {
     if (message.author?.bot) return; 
     const embed = new EmbedBuilder()
@@ -683,20 +698,16 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         sendLog(newState.guild, { embeds: [embed] });
     }
 });
-// ---------------- HAFİYE LOG SİSTEMİ BİTİŞ ----------------
 
-// =============================================================================
-// OTO MODERASYON, OTO CEVAP VE TROLL YAPAY ZEKA (AI)
-// =============================================================================
+// OTO MODERASYON & TROLL AI
 const KUFURLER = ["amk", "aq", "sik", "oç", "piç", "yavşak", "sürtük", "göt"];
-const REKLAM_REGEX = /(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,}|discord\.gg\/[a-zA-Z0-9]+)/gi;
+const REKLAM_REGEX = /(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|discord\.gg\/[a-zA-Z0-9]+)/gi;
 
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
     const isAdmin = message.member?.permissions.has(PermissionsBitField.Flags.Administrator);
     const content = message.content.toLowerCase();
 
-    // 1. ERENSİ TARZI OTO-MODERASYON
     if (!isAdmin) {
         if (REKLAM_REGEX.test(content)) {
             await message.delete().catch(() => {});
@@ -709,7 +720,6 @@ client.on('messageCreate', async message => {
         }
     }
 
-    // 2. OTO CEVAPLAR
     if (content.includes('fiyat') || content.includes('kaç tl') || content.includes('ne kadar')) {
         return message.reply({
             content: `👋 Merhaba **${message.author.username}**! \n💰 Güncel fiyat listesi için <#${CONFIG.LOG_CHANNEL_ID}> kanalına bakabilir veya \`/ticket-kur\` komutuyla ticket açarak öğrenebilirsin.`,
@@ -723,7 +733,6 @@ client.on('messageCreate', async message => {
         });
     }
 
-    // 3. TROLL AI SOHBET SİSTEMİ (GÜNCELLENDİ: HATA DEDEKTÖRLÜ & YENİ MODEL)
     try {
         const aiChannelId = await firebaseRequest('get', '_AI_CHANNEL_');
         if (aiChannelId && message.channel.id === aiChannelId) {
@@ -743,9 +752,8 @@ client.on('messageCreate', async message => {
                 return message.reply("⚠️ Kanka Render'da GEMINI_API_KEY şifresini algılamadı. Ayarları kontrol edip Render'ı 'Clear Cache & Deploy' yapsana.");
             }
 
-            // MODEL İSMİ BURADA GÜNCELLENDİ
             const model = genAI.getGenerativeModel({ 
-                model: "gemini-1.5-flash-latest", // <---- HATAYI ÇÖZEN KISIM
+                model: "gemini-1.5-flash-latest",
                 systemInstruction: "Sen Discord'da takılan, çok laubali, sarkastik, biraz troll ve kafa dengi bir botsun. İnsanlara 'kanka', 'birader', 'olum' diye hitap et. Çok ciddi cevaplar verme, ironi yap. Arada cümle sonlarına 'asdasd', 'qweqwe' veya random harfler (jsjsjs) ekleyerek gül. Kısa ve net cevaplar ver. Biri sana laf atarsa altta kalma, lafı yapıştır.",
                 safetySettings: [
                     { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
@@ -763,15 +771,13 @@ client.on('messageCreate', async message => {
         }
     } catch (error) {
         console.error("🔥 AI KESİN HATA LOGU:", error);
-        
-        // Hata mesajını direk chat'e atıyor ki neyin patladığını görelim
         const errorMsg = error.message ? error.message : "Bilinmeyen hata amk";
         return message.reply(`⚠️ **Kanka bir boklar oldu aq!** Hata detayı: \`${errorMsg}\``);
     }
 });
 
 // =============================================================================
-// 6. ETKİLEŞİM YÖNETİCİSİ (ZIRHLI TRY-CATCH)
+// 6. ETKİLEŞİM YÖNETİCİSİ
 // =============================================================================
 client.on('interactionCreate', async interaction => {
     try {
@@ -793,16 +799,24 @@ async function handleCommand(interaction) {
     const { commandName, options, user, guild } = interaction;
     try {
 
-        // ==================== VALORANT SİSTEMİ ====================
+        if (commandName === 'zorla-calistir') {
+            await interaction.reply({ content: '⚙️ **Bot bağlantıları zorla yenileniyor...** Bu işlem botun takıldığını düşündüğünüzde kullanılmalıdır.', ephemeral: true });
+            try {
+                client.destroy();
+                await client.login(process.env.TOKEN);
+                connectToVoice();
+                sendLog(guild, `🚀 **ZORLA ÇALIŞTIR YAPILDI**\n**Yetkili:** ${user.tag}\nSistem manuel olarak canlandırıldı.`);
+            } catch (error) { console.error(error); }
+            return;
+        }
+
         if (commandName === 'val-rank') {
             await interaction.deferReply();
             const nick = options.getString('nick');
             const etiket = options.getString('etiket').replace('#', '');
-            
             try {
                 const res = await axios.get(`https://api.henrikdev.xyz/valorant/v1/mmr/eu/${encodeURIComponent(nick)}/${encodeURIComponent(etiket)}`, { timeout: 10000 });
                 if (!res.data || !res.data.data) throw new Error("Veri yok");
-                
                 const data = res.data.data;
                 const embed = new EmbedBuilder()
                     .setTitle(`🎮 ${data.name}#${data.tag} | Güncel Rank`)
@@ -814,7 +828,6 @@ async function handleCommand(interaction) {
                     )
                     .setThumbnail(data.images?.small || 'https://freelogopng.com/images/all_img/1664302216valorant-logo-png.png')
                     .setFooter({ text: 'SAHO CHEATS | Valorant Stats' });
-                    
                 return interaction.editReply({ embeds: [embed] });
             } catch (error) {
                 return interaction.editReply("❌ **Kanka hesabı bulamadım veya api yoğun.** Gizli profilleri göremem.");
@@ -825,14 +838,11 @@ async function handleCommand(interaction) {
             await interaction.deferReply();
             const nick = options.getString('nick');
             const etiket = options.getString('etiket').replace('#', '');
-            
             try {
                 const res = await axios.get(`https://api.henrikdev.xyz/valorant/v3/matches/eu/${encodeURIComponent(nick)}/${encodeURIComponent(etiket)}`, { timeout: 10000 });
                 if (!res.data || !res.data.data || res.data.data.length === 0) throw new Error("Maç yok");
-                
                 const lastMatch = res.data.data[0];
                 const player = lastMatch.players.all.find(p => p.name.toLowerCase() === nick.toLowerCase() && p.tag.toLowerCase() === etiket.toLowerCase());
-                
                 if (!player) throw new Error("Oyuncu eşleşmedi");
 
                 const kda = `${player.stats.kills} / ${player.stats.deaths} / ${player.stats.assists}`;
@@ -851,7 +861,6 @@ async function handleCommand(interaction) {
                     .setThumbnail(player.assets.agent.small)
                     .setFooter({ text: 'SAHO CHEATS | Valorant Tracker' })
                     .setTimestamp(new Date(lastMatch.metadata.game_start * 1000));
-                    
                 return interaction.editReply({ embeds: [embed] });
             } catch (error) {
                 return interaction.editReply("❌ **Kanka oyuncunun son maçını çekemedim.**");
@@ -863,25 +872,21 @@ async function handleCommand(interaction) {
             try {
                 const res = await axios.get(`https://api.henrikdev.xyz/valorant/v2/store-featured`, { timeout: 10000 });
                 if (!res.data || !res.data.data) throw new Error("Mağaza verisi yok");
-                
                 const bundles = res.data.data;
                 const embed = new EmbedBuilder()
                     .setTitle('🛒 VALORANT GÜNCEL MAĞAZA VİTRİNİ')
                     .setDescription('Şu anki öne çıkan paketler ve skinler aşağıdadır:')
                     .setColor(CONFIG.GOLD_COLOR);
-                    
                 bundles.forEach((bundle, index) => {
                     embed.addFields({ name: `🎁 Paket ${index + 1}`, value: `**İsim:** ${bundle.bundle_price ? bundle.bundle_price + ' VP' : 'Vitrin Paketi'}`, inline: false });
                     if (index === 0 && bundle.bundle_uuid) embed.setImage(`https://media.valorant-api.com/bundles/${bundle.bundle_uuid}/displayicon.png`);
                 });
-                
                 return interaction.editReply({ embeds: [embed] });
             } catch (error) {
                 return interaction.editReply("❌ **Kanka mağaza verilerini çekerken hata oldu.**");
             }
         }
 
-        // ==================== YENİ EKLENEN SİSTEM KOMUTLARI ====================
         if (commandName === 'ping') {
             const sent = await interaction.reply({ content: '🏓 Hesaplanıyor...', fetchReply: true, ephemeral: true });
             const latency = sent.createdTimestamp - interaction.createdTimestamp;
@@ -894,7 +899,6 @@ async function handleCommand(interaction) {
                 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
                 await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
                 sendLog(guild, `🔄 **SİSTEM GÜNCELLENDİ**\n**Yetkili:** ${user.tag}\nBot yeniden başlatılıyor...`);
-                // Botu kapatıp Render'ın veya PM2'nin yeniden başlatmasını sağlar
                 setTimeout(() => { process.exit(1); }, 2000);
                 return;
             } catch (error) {
@@ -936,26 +940,20 @@ async function handleCommand(interaction) {
             return interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
         }
 
-        // ==================== DİĞER ORİJİNAL KOMUTLAR ====================
         if (commandName === 'nuke') {
             const channel = interaction.channel;
             const position = channel.position;
             const topic = channel.topic;
-         
             await interaction.reply('☢️ **Kanal patlatılıyor...**');
-         
             const newChannel = await channel.clone();
             await newChannel.setPosition(position);
             if (topic) await newChannel.setTopic(topic);
-         
             await channel.delete();
-         
             const nukeEmbed = new EmbedBuilder()
                 .setTitle('☢️ KANAL TEMİZLENDİ')
                 .setDescription('Bu kanal **SAHO CHEATS** yönetim tarafından sıfırlandı.')
                 .setImage('https://media1.tenor.com/m/X9kZ5h7qK64AAAAC/nuclear-bomb-explosion.gif')
                 .setColor(CONFIG.ERROR_COLOR);
-             
             return newChannel.send({ embeds: [nukeEmbed] });
         }
         if (commandName === 'lock') {
@@ -969,8 +967,7 @@ async function handleCommand(interaction) {
         if (commandName === 'format') {
             const urun = options.getString('urun');
             const ozelliklerStr = options.getString('ozellikler');
-            const ozellikler = ozelliklerStr.split(',').slice(0, 60); // Max 60
-            
+            const ozellikler = ozelliklerStr.split(',').slice(0, 60);
             const gorsel1 = options.getAttachment('gorsel1');
             const gorsel2 = options.getAttachment('gorsel2');
             const gorsel3 = options.getAttachment('gorsel3');
@@ -1003,7 +1000,7 @@ async function handleCommand(interaction) {
                 `)
                 .setColor(CONFIG.GOLD_COLOR)
                 .setThumbnail('https://cdn-icons-png.flaticon.com/512/4712/4712109.png')
-                .setImage('https://example.com/profesyonel-banner.gif') // Banner resim ekle
+                .setImage('https://example.com/profesyonel-banner.gif')
                 .setFooter({ text: 'SAHO CHEATS | Hızlı & Güvenilir Destek', iconURL: client.user.avatarURL() });
             const menu = new StringSelectMenuBuilder()
                 .setCustomId('ticket_create_menu')
@@ -1023,7 +1020,6 @@ async function handleCommand(interaction) {
                 .setDescription('Aşağıdaki menüden merak ettiğiniz konuyu seçin.')
                 .setColor(CONFIG.INFO_COLOR)
                 .setFooter({ text: 'SAHO CHEATS Knowledge Base' });
-             
             const menu = new StringSelectMenuBuilder()
                 .setCustomId('faq_select')
                 .setPlaceholder('Bir konu seçin...')
@@ -1034,7 +1030,6 @@ async function handleCommand(interaction) {
                     { label: 'Destek Saatleri', description: 'Ne zaman cevap alabilirim?', value: 'faq_support', emoji: '⏰' },
                     { label: 'Kurulum Zor Mu?', description: 'Teknik bilgi gerekir mi?', value: 'faq_install', emoji: '🛠️' }
                 );
-             
             return interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
         }
         if (commandName === 'help') {
@@ -1044,7 +1039,7 @@ async function handleCommand(interaction) {
                 .setDescription('Botun tüm komutları aşağıda listelenmiştir.')
                 .addFields(
                     { name: '👤 **Kullanıcı Komutları**', value: '> `/lisansim`, `/cevir`, `/sss`, `/referans`, `/val-rank`, `/val-sonmac`, `/val-vitrin`' },
-                    { name: '🛡️ **Yetkili Komutları**', value: '> `/format`, `/ticket-kur`, `/durum-guncelle`, `/loader-durum`\n> `/dm`, `/nuke`, `/lock`, `/unlock`, `/kick`, `/ban`\n> `/vip-ekle`, `/tum-lisanslar`, `/depremkur`, `/welcomer-kur`, `/welcomer-dashboard`, `/ai-kur`, `/ping`, `/guncelle`' }
+                    { name: '🛡️ **Yetkili Komutları**', value: '> `/format`, `/ticket-kur`, `/durum-guncelle`, `/loader-durum`\n> `/dm`, `/nuke`, `/lock`, `/unlock`, `/kick`, `/ban`\n> `/vip-ekle`, `/tum-lisanslar`, `/depremkur`, `/welcomer-kur`, `/welcomer-dashboard`, `/ai-kur`, `/ping`, `/guncelle`, `/zorla-calistir`' }
                 )
                 .setFooter({ text: 'SAHO CHEATS Automation' });
             return interaction.reply({ embeds: [embed], ephemeral: true });
@@ -1147,9 +1142,7 @@ async function handleCommand(interaction) {
         if (commandName === 'sunucu-bilgi') {
             const embed = new EmbedBuilder()
                 .setTitle(`📊 ${guild.name}`)
-                .addFields(
-                    { name: '👥 Üye', value: `${guild.memberCount}`, inline: true }
-                )
+                .addFields({ name: '👥 Üye', value: `${guild.memberCount}`, inline: true })
                 .setColor(CONFIG.EMBED_COLOR);
             return interaction.reply({ embeds: [embed] });
         }
@@ -1332,7 +1325,6 @@ async function handleButton(interaction) {
         if (customId === 'close_ticket') {
             await interaction.reply({ embeds: [new EmbedBuilder().setDescription('🔒 **Ticket kapatılıyor ve arşivleniyor...**').setColor(CONFIG.ERROR_COLOR)] });
 
-            // Arşivleme İşlemi (Gelişmiş Döküm)
             try {
                 const messages = await channel.messages.fetch({ limit: 100 });
                 const archiveChannel = client.channels.cache.get(CONFIG.ARCHIVE_CHANNEL_ID);
@@ -1399,7 +1391,7 @@ async function handleButton(interaction) {
 }
 
 // =============================================================================
-// 9. SELECT MENU HANDLER (ÇİFT CEVAP HATASI GİDERİLDİ)
+// 9. SELECT MENU HANDLER
 // =============================================================================
 async function handleSelectMenu(interaction) {
     const { customId, values, user, guild } = interaction;

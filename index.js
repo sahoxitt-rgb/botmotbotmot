@@ -1,15 +1,8 @@
-const { Client, GatewayIntentBits } = require('discord.js');
-const { DisTube } = require('distube'); // Sadece bir kez tanımlanmalı
-
-// ... kodun devamı
-const { DisTube } = require('distube'); 
-const { YouTubePlugin } = require('@distube/youtube'); 
-const { YtDlpPlugin } = require('@distube/yt-dlp'); // 🔥 ENGEL DELİCİ GELDİ
 require('dotenv').config();
 const {
     Client,
     GatewayIntentBits,
-    EmbedBuilder,
+    EmbedBuilder, // "aEmbedBuilder" hatası düzeltildi
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
@@ -24,13 +17,21 @@ const {
     PermissionsBitField,
     ActivityType
 } = require('discord.js');
+
 const { joinVoiceChannel, VoiceConnectionStatus, entersState } = require('@discordjs/voice');
 const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const path = require('path'); 
+
+// Müzik Modülleri Tek Bir Yerde
 const { DisTube } = require('distube'); 
 const { YouTubePlugin } = require('@distube/youtube'); 
+const { YtDlpPlugin } = require('@distube/yt-dlp'); // 🔥 ENGEL DELİCİ GELDİ
+
+// =============================================================================
+// AYARLAR VE KONFİGÜRASYON
+// =============================================================================
 
 // =============================================================================
 // AYARLAR VE KONFİGÜRASYON

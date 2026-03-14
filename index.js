@@ -1,3 +1,7 @@
+const { Client, GatewayIntentBits } = require('discord.js');
+const { DisTube } = require('distube'); // Sadece bir kez tanımlanmalı
+
+// ... kodun devamı
 const { DisTube } = require('distube'); 
 const { YouTubePlugin } = require('@distube/youtube'); 
 const { YtDlpPlugin } = require('@distube/yt-dlp'); // 🔥 ENGEL DELİCİ GELDİ

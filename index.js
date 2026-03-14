@@ -1,3 +1,6 @@
+const { DisTube } = require('distube'); 
+const { YouTubePlugin } = require('@distube/youtube'); 
+const { YtDlpPlugin } = require('@distube/yt-dlp'); // 🔥 ENGEL DELİCİ GELDİ
 require('dotenv').config();
 const {
     Client,
@@ -136,20 +139,14 @@ const client = new Client({
 
 // 🎵 DISTUBE MÜZİK AYARLARI
 const distube = new DisTube(client, {
-    plugins: [new YouTubePlugin()] 
-});
-
-distube.on('playSong', (queue, song) => {
-    queue.textChannel.send(`🎶 **Şu an patlıyoruz:** \`${song.name}\` - \`${song.formattedDuration}\`\n🎤 **İsteyen:** ${song.user}`);
-});
-
-distube.on('addSong', (queue, song) => {
-    queue.textChannel.send(`✅ **Sıraya eklendi:** \`${song.name}\` - \`${song.formattedDuration}\``);
-});
-
-distube.on('error', (channel, e) => {
-    if (channel) channel.send(`❌ **Kanka çalarken bi hata oldu aq:** ${e.toString().slice(0, 100)}...`);
-    console.error("Müzik Hatası:", e);
+    plugins: [
+        new YouTubePlugin(),
+        new YtDlpPlugin({ update: true }) // 🔥 YOUTUBE ENGELİNİ DELMEK İÇİN
+    ],
+    ytdlOptions: {
+        highWaterMark: 1 << 24, // Şarkının ortasında bağlantı kopmasını engeller kanka
+        quality: 'highestaudio'
+    }
 });
 
 // =============================================================================

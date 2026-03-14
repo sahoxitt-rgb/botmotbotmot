@@ -22,15 +22,12 @@ const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const path = require('path'); 
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-const { DisTube } = require('distube'); // 🎵 MÜZİK EKLENTİSİ GELDİ KANKA
-const { YouTubePlugin } = require('@distube/youtube'); // 🔍 YOUTUBE GÖZLÜĞÜ EKLENDİ KANKA
+const { DisTube } = require('distube'); 
+const { YouTubePlugin } = require('@distube/youtube'); 
 
 // =============================================================================
 // AYARLAR VE KONFİGÜRASYON
 // =============================================================================
-const apiKey = process.env.GEMINI_API_KEY || "BOS";
-const genAI = new GoogleGenerativeAI(apiKey);
 
 const CONFIG = {
     // ------------------- VERİTABANI BAĞLANTISI -------------------
@@ -116,7 +113,7 @@ const port = process.env.PORT || 8080;
 app.listen(port, () => {
     console.log(`🌍 [SERVER] Web sunucusu ${port} portunda başlatıldı.`);
     
-    // ANTI-UYKU SİSTEMİ: Render/Replit gibi yerlerde uyumasını engeller
+    // ANTI-UYKU SİSTEMİ
     setInterval(() => {
         axios.get(`http://localhost:${port}/`).catch(() => {});
     }, 5 * 60 * 1000); 
@@ -137,9 +134,9 @@ const client = new Client({
     partials: [Partials.Channel, Partials.Message, Partials.User]
 });
 
-// 🎵 DISTUBE MÜZİK AYARLARI (GÜNCELLENDİ)
+// 🎵 DISTUBE MÜZİK AYARLARI
 const distube = new DisTube(client, {
-    plugins: [new YouTubePlugin()] // YOUTUBE ARAMASI BURADA DEVREYE GİRİYOR!
+    plugins: [new YouTubePlugin()] 
 });
 
 distube.on('playSong', (queue, song) => {
@@ -209,12 +206,6 @@ const commands = [
     
     new SlashCommandBuilder().setName('sss').setDescription('❓ Sıkça Sorulan Sorular'),
     new SlashCommandBuilder().setName('help').setDescription('📚 Bot kullanım rehberi ve tüm komutlar.'),
-    
-    new SlashCommandBuilder()
-        .setName('ai-kur')
-        .setDescription('🤖 (Admin) Troll Yapay Zeka kanalını belirler.')
-        .addChannelOption(o => o.setName('kanal').setDescription('AI Kanalı').setRequired(true))
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     
     new SlashCommandBuilder()
         .setName('depremkur')
@@ -573,7 +564,7 @@ client.once('ready', async () => {
     console.log(`\n=============================================`);
     console.log(`✅ BOT GİRİŞ YAPTI: ${client.user.tag}`);
     console.log(`🆔 BOT ID: ${client.user.id}`);
-    console.log(`🛡️ ZIRH SİSTEMİ: AKTİF (Bot Çökmesi Engellendi)`);
+    console.log(`🛡️ ZIRH SİSTEMİ: AKTİF`);
     console.log(`🎵 MÜZİK SİSTEMİ: AKTİF`);
     console.log(`=============================================\n`);
  
@@ -589,8 +580,7 @@ client.once('ready', async () => {
             `🎶 Müzik Dinliyor`,
             `🛡️ Loader: ${loaderStatus}`,
             `7/24 Destek Hattı`,
-            `🚨 Deprem İzliyor`,
-            `🤖 Troll AI Aktif`
+            `🚨 Deprem İzliyor`
         ];
         if (client.user) client.user.setActivity({ name: activities[index], type: ActivityType.Playing });
         index = (index + 1) % activities.length;
@@ -733,7 +723,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     }
 });
 
-// OTO MODERASYON & TROLL AI
+// OTO MODERASYON
 const KUFURLER = ["amk", "aq", "sik", "oç", "piç", "yavşak", "sürtük", "göt"];
 const REKLAM_REGEX = /(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|discord\.gg\/[a-zA-Z0-9]+)/gi;
 
@@ -765,48 +755,6 @@ client.on('messageCreate', async message => {
             content: `🛒 Satın almak için lütfen **Ticket** açınız. Yetkililerimiz size yardımcı olacaktır.`,
             allowedMentions: { repliedUser: true }
         });
-    }
-
-    try {
-        const aiChannelId = await firebaseRequest('get', '_AI_CHANNEL_');
-        if (aiChannelId && message.channel.id === aiChannelId) {
-            
-            if (!message.content || message.content.trim() === "") return;
-
-            if (content.includes("ananı skm") || content.includes("ananı sikiyim")) {
-                return message.reply("bende senin ananı skym asdasdasdasd uza lan buradan 🤣");
-            }
-            if (content.includes("oç") || content.includes("orospu")) {
-                return message.reply("sensin oç aynaya bak da konuş qweqweqwe 😂");
-            }
-
-            await message.channel.sendTyping();
-            
-            if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "BOS") {
-                return message.reply("⚠️ Kanka Render'da GEMINI_API_KEY şifresini algılamadı. Ayarları kontrol edip Render'ı 'Clear Cache & Deploy' yapsana.");
-            }
-
-            const model = genAI.getGenerativeModel({ 
-                model: "gemini-1.5-pro",
-                systemInstruction: "Sen Discord'da takılan, çok laubali, sarkastik, biraz troll ve kafa dengi bir botsun. İnsanlara 'kanka', 'birader', 'olum' diye hitap et. Çok ciddi cevaplar verme, ironi yap. Arada cümle sonlarına 'asdasd', 'qweqwe' veya random harfler (jsjsjs) ekleyerek gül. Kısa ve net cevaplar ver. Biri sana laf atarsa altta kalma, lafı yapıştır.",
-                safetySettings: [
-                    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-                    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-                    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-                    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-                ]
-            });
-
-            const result = await model.generateContent(message.content.toString());
-            const responseText = result.response.text();
-
-            if (!responseText) throw new Error("Google filtrelediği için boş döndü.");
-            return message.reply(responseText);
-        }
-    } catch (error) {
-        console.error("🔥 AI KESİN HATA LOGU:", error);
-        const errorMsg = error.message ? error.message : "Bilinmeyen hata amk";
-        return message.reply(`⚠️ **Kanka bir boklar oldu aq!** Hata detayı: \`${errorMsg}\``);
     }
 });
 
@@ -989,11 +937,6 @@ async function handleCommand(interaction) {
             }
         }
 
-        if (commandName === 'ai-kur') {
-            const kanal = options.getChannel('kanal');
-            await firebaseRequest('put', '_AI_CHANNEL_', kanal.id);
-            return interaction.reply({ content: `✅ AI Sohbet kanalı ${kanal} olarak ayarlandı. Artık botla oradan makara yapabilirsiniz!`, ephemeral: true });
-        }
         if (commandName === 'depremkur') {
             const kanal = options.getChannel('kanal');
             CONFIG.DEPREM_CHANNEL_ID = kanal.id;
@@ -1122,7 +1065,7 @@ async function handleCommand(interaction) {
                 .setDescription('Botun tüm komutları aşağıda listelenmiştir.')
                 .addFields(
                     { name: '👤 **Kullanıcı Komutları**', value: '> `/oynat`, `/durdur`, `/gec`, `/lisansim`, `/cevir`, `/sss`, `/referans`, `/val-rank`, `/val-sonmac`, `/val-vitrin`' },
-                    { name: '🛡️ **Yetkili Komutları**', value: '> `/format`, `/ticket-kur`, `/durum-guncelle`, `/loader-durum`\n> `/dm`, `/nuke`, `/lock`, `/unlock`, `/kick`, `/ban`\n> `/vip-ekle`, `/tum-lisanslar`, `/depremkur`, `/welcomer-kur`, `/welcomer-dashboard`, `/ai-kur`, `/ping`, `/guncelle`, `/zorla-calistir`' }
+                    { name: '🛡️ **Yetkili Komutları**', value: '> `/format`, `/ticket-kur`, `/durum-guncelle`, `/loader-durum`\n> `/dm`, `/nuke`, `/lock`, `/unlock`, `/kick`, `/ban`\n> `/vip-ekle`, `/tum-lisanslar`, `/depremkur`, `/welcomer-kur`, `/welcomer-dashboard`, `/ping`, `/guncelle`, `/zorla-calistir`' }
                 )
                 .setFooter({ text: 'SAHO CHEATS Automation' });
             return interaction.reply({ embeds: [embed], ephemeral: true });
